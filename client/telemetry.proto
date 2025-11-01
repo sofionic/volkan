@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package telemetry;
+
+message StreamRequest {
+  string spacecraft_id = 1;
+}
+
+message Telemetry {
+  string spacecraft_id = 1;
+  int64 timestamp_ms = 2;
+  double cabin_pressure_kpa = 3;
+  double velocity_kps = 4;
+  double cabin_temperature_c = 5;
+}
+
+service TelemetryService {
+  rpc StreamTelemetry(StreamRequest) returns (stream Telemetry);
+}

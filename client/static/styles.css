@@ -1,0 +1,203 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Roboto, sans-serif;
+  background: #0b1424;
+  color: #f5f7fa;
+}
+
+.page-header {
+  padding: 2rem;
+  background: linear-gradient(135deg, #1f3b73, #0b1424 70%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 2.5rem;
+}
+
+.subtitle {
+  margin: 0.5rem 0 0;
+  color: rgba(245, 247, 250, 0.7);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.5rem;
+  padding: 1.5rem 2rem 3rem;
+}
+
+.controls,
+.overview,
+.details {
+  background: rgba(17, 33, 60, 0.85);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.data-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.controls h2,
+.overview h2,
+.details h2 {
+  margin-top: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 1.1rem;
+  color: #88c0ff;
+}
+
+.control-group {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+input[type='text'] {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(10, 18, 34, 0.9);
+  color: #f5f7fa;
+}
+
+fieldset {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 0 0 1rem;
+}
+
+.channels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+button {
+  padding: 0.75rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  color: #0b1424;
+  background: #88c0ff;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(136, 192, 255, 0.3);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.secondary {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5f7fa;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  background: rgba(8, 16, 32, 0.9);
+  border: 1px solid rgba(136, 192, 255, 0.2);
+  border-radius: 10px;
+  padding: 1rem;
+  min-height: 140px;
+}
+
+.card-title {
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  color: #c5e1ff;
+}
+
+.card-body {
+  margin: 0;
+  white-space: pre-line;
+  font-family: "Fira Code", "Source Code Pro", monospace;
+  font-size: 0.95rem;
+}
+
+.detail-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-card {
+  background: rgba(8, 16, 32, 0.9);
+  border-radius: 10px;
+  border: 1px solid rgba(136, 192, 255, 0.2);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.detail-card h3 {
+  margin: 0;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #c5e1ff;
+}
+
+.detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.metric-label {
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  color: rgba(245, 247, 250, 0.7);
+}
+
+.metric-value {
+  font-size: 0.95rem;
+  font-family: "Fira Code", "Source Code Pro", monospace;
+  color: #f5f7fa;
+}
+
+@media (max-width: 960px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .buttons {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+}

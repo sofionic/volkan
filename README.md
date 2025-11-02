@@ -72,33 +72,34 @@ versions you have on the machine.
 
 ## Runbook
 
-Open three terminals (four if you want the optional CLI) and run the commands below in order.
-
-### 1. Start the BLonQ Transceiver mock
-
-```bash
-python transceiver/blonq_transceiver_mock.py
-```
-
-You can run this command from any terminal that can reach your Python interpreter—PowerShell, Command Prompt, Windows Terminal, or Git Bash are all fine as long as `python` (or the launcher `py`) resolves correctly on your PATH.
-
-Environment variables allow you to change the UDP target host, port, emission rate, or spacecraft identifier:
-
-* `BLONQ_TARGET_HOST` (default `127.0.0.1`)
-* `BLONQ_TARGET_PORT` (default `6000`)
-* `BLONQ_RATE_HZ` (default `250`)
-* `BLONQ_SPACECRAFT_ID` (default `XC-2041`)
-
-### 2. Launch the Stargate service
+### 1. Launch the Stargate service (auto-starts support processes)
 
 ```bash
 dotnet restore stargate/StargateService/StargateService.csproj
 dotnet run --project stargate/StargateService/StargateService.csproj
 ```
 
+Stargate now starts the BLonQ transceiver mock and the FastAPI dashboard automatically using the Python executable on your PATH.
+Ensure the dependencies from `client/requirements.txt` are installed for that interpreter so the helper processes boot cleanly.
+You will see log entries confirming each helper process and their PIDs—mirroring how a packaged `.exe` orchestrates the full
+stack on an operator workstation.
+
+> **Tip**
+> To disable automation (for example, while debugging the Python tools manually), set `PythonAutomation__Enabled=false` in
+> `stargate/StargateService/appsettings.json` or export the environment variable before running `dotnet run`.
+> Adjust `PythonAutomation__PythonExecutable` if you prefer launching via `py` or a fully qualified interpreter path.
+
 The service listens for UDP telemetry on port `6000` and exposes the gRPC endpoint on `http://localhost:5000`.
 
-Configuration is located in `stargate/StargateService/appsettings.json`.
+### 2. (Optional) Manually run the BLonQ transceiver mock
+
+```bash
+python transceiver/blonq_transceiver_mock.py
+```
+
+Use this only if automation is disabled. Environment variables let you change the UDP target host, port, emission rate, or
+spacecraft identifier (`BLONQ_TARGET_HOST`, `BLONQ_TARGET_PORT`, `BLONQ_RATE_HZ`, `BLONQ_SPACECRAFT_ID`). Any terminal—PowerShell,
+Command Prompt, Windows Terminal, or Git Bash—will work as long as the Python interpreter is available.
 
 ### 3. (Optional) Run the telemetry CLI
 
@@ -106,26 +107,35 @@ Configuration is located in `stargate/StargateService/appsettings.json`.
 python client/telemetry_client.py --host 127.0.0.1 --port 5000
 ```
 
-The CLI supports the commands `start`, `stop`, and `quit`. By default it subscribes to all spacecraft. To filter for a specific spacecraft, pass `--spacecraft-id <ID>`.
+The CLI supports the commands `start`, `stop`, and `quit`. By default it subscribes to all spacecraft; pass `--spacecraft-id <ID>`
+to filter for a specific vehicle. The first execution generates Python gRPC stubs from `client/telemetry.proto` (requires
+`grpcio-tools`).
 
-The first execution generates Python gRPC stubs from `client/telemetry.proto` (requires `grpcio-tools`).
+### 4. Browse the web dashboard
 
-### 4. Launch the web dashboard
+The FastAPI server started in step 1 listens on `http://127.0.0.1:8000`. Open the URL in a browser to view the dashboard:
+
+* **Controls column** – choose the spacecraft ID, toggle subsystem checkboxes, and issue `Start`, `Stop`, or `Quit` commands.
+* **Capsule overview** – card-based summary of life support, navigation, power, propulsion, and thermal highlights.
+* **Detailed telemetry** – formatted metrics grouped by subsystem beneath the overview, with human-friendly units for each
+  channel.
+
+To relocate the dashboard server, edit `DASHBOARD_HOST`/`DASHBOARD_PORT` in `appsettings.json` or override those environment
+variables before launching Stargate.
+
+## Containerised deployment
+
+Build and run the full stack with Docker Compose when you prefer containers:
 
 ```bash
-python client/web_dashboard.py
+docker compose up --build
 ```
 
-The FastAPI server listens on `http://127.0.0.1:8000` by default. Open the URL in a browser to view the dashboard:
+* `transceiver` – Python container publishing UDP telemetry toward Stargate.
+* `stargate` – .NET 8 container hosting the gRPC service (with Python automation disabled).
+* `dashboard` – FastAPI WebSocket bridge serving the web UI on http://localhost:8000.
 
-* Use the **Spacecraft ID** field to focus on a single vehicle (leave blank for all telemetry).
-* Toggle subsystem checkboxes to filter the telemetry channels rendered in the detailed view.
-* Click **Start** to begin streaming updates and **Stop** to pause without closing the page.
-
-Environment variables allow you to bind the server elsewhere:
-
-* `DASHBOARD_HOST` (default `127.0.0.1`)
-* `DASHBOARD_PORT` (default `8000`)
+Stop the stack with `docker compose down`. Override ports or environment variables in `docker-compose.yml` as needed.
 
 ## Verification & testing
 

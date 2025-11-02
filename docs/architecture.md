@@ -20,6 +20,7 @@ flowchart LR
         C[TelemetryBroadcaster]
         D[gRPC Endpoint]
         L[Captain's Log API]
+        P[Python Process\nOrchestrator]
     end
     subgraph Client[Telemetry Front-Ends]
         E[Interactive CLI]\nPython
@@ -35,11 +36,13 @@ flowchart LR
     C -- push --> D
     D -- gRPC stream --> E
     D -- gRPC stream --> W
+    P --> A
+    P --> W
     E --> N
     N -. persist requests .-> L
 ```
 
-The UDP listener (`UdpTelemetryListener`) binds to the configured port, deserialises JSON payloads into `TelemetryPayload` records, and publishes them to the `TelemetryBroadcaster`. Each connected gRPC client receives a dedicated channel reader so that slow consumers do not block ingestion.
+The UDP listener (`UdpTelemetryListener`) binds to the configured port, deserialises JSON payloads into `TelemetryPayload` records, and publishes them to the `TelemetryBroadcaster`. The Python process orchestrator boots the BLonQ mock and web dashboard whenever Stargate starts, so operator workstations receive a full stack with one command. Each connected gRPC client receives a dedicated channel reader so that slow consumers do not block ingestion.
 
 The telemetry gateway is intentionally left as a future deliverable. Its role is to host protocol-specific adapters (e.g. ADS.NET, CAN, UART) and publish normalised telemetry toward Stargate using the same UDP contract exercised by the mock today. This keeps the Stargate implementation stable while enabling heterogeneous sensor networks.
 

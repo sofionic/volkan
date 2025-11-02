@@ -36,18 +36,21 @@
         <div class="buttons">
           <button id="start">Start</button>
           <button id="stop">Stop</button>
+          <button id="quit" class="secondary">Quit</button>
         </div>
       </section>
 
-      <section class="overview">
-        <h2>Capsule Overview</h2>
-        <div id="capsule-status" class="card-grid"></div>
-      </section>
+      <div class="data-column">
+        <section class="overview">
+          <h2>Capsule Overview</h2>
+          <div id="capsule-status" class="card-grid"></div>
+        </section>
 
-      <section class="details">
-        <h2>Detailed Telemetry</h2>
-        <div id="telemetry-table" class="table"></div>
-      </section>
+        <section class="details">
+          <h2>Detailed Telemetry</h2>
+          <div id="telemetry-table" class="detail-grid"></div>
+        </section>
+      </div>
     </main>
 
     <template id="status-card-template">

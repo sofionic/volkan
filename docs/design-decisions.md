@@ -7,6 +7,8 @@
 * **UDP JSON payloads** – JSON keeps the mock/lightweight prototype language-agnostic and easy to inspect while keeping the focus on the Stargate service.
 * **Python for mock & client** – Python provides rapid prototyping speed, strong UDP/gRPC library support, and ease of scripting for operators. The language choice ensures the mock and client can evolve quickly (e.g. swapping the random generator for a gateway feed) without impacting the .NET Stargate core.
 * **FastAPI web dashboard** – FastAPI + WebSockets let us surface telemetry in a browser while reusing the existing Python gRPC client stack. Operators get a richer UI without introducing a separate JavaScript build pipeline.
+* **Python process orchestration** – Stargate now ships with a hosted service that launches the BLonQ mock and FastAPI dashboard automatically. Operators start a single executable and receive the full stack, while configuration switches keep manual workflows available.
+* **Docker Compose baseline** – Optional container definitions satisfy the “solution can be containerised” requirement and allow teams to run the prototype without installing Python locally.
 
 ## Telemetry fan-out strategy
 
@@ -23,11 +25,11 @@ engineering raw sensor IDs.
 
 ## Configuration
 
-`appsettings.json` holds the UDP host/port and Kestrel configuration. Environment variables can override them (default ASP.NET Core behaviour).
+`appsettings.json` holds the UDP host/port, Python automation settings, and Kestrel configuration. Environment variables can override them (default ASP.NET Core behaviour).
 
 ## Client interactivity
 
-The console client exposes simple `start`, `stop`, and `quit` commands, keeping scripted diagnostics lightweight. The new FastAPI dashboard runs alongside it to provide channel filtering, capsule status summaries, and a control surface in the browser without duplicating Stargate logic.
+The console client exposes simple `start`, `stop`, and `quit` commands, keeping scripted diagnostics lightweight. The refreshed FastAPI dashboard mirrors those controls, adds a dedicated `Quit` action, and lays out capsule overview cards above a detailed telemetry column so operators can pivot between summaries and granular metrics without scrolling across multiple panes.
 
 ## Prototype boundaries
 
@@ -49,6 +51,7 @@ flowchart TB
         S1[Validation]
         S2[gRPC fan-out]
         S3[Navigation log API]
+        S4[Python orchestrator]
     end
     subgraph Client[Telemetry Clients]
         C1[Console stream]
@@ -61,6 +64,8 @@ flowchart TB
     S2 --> C1
     S2 --> C2
     S3 --> C3
+    S4 --> M1
+    S4 --> C2
 
     classDef boundary stroke-dasharray: 5 5;
     class Mock,Gateway,Stargate,Client boundary;

@@ -41,6 +41,12 @@ body {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
 }
 
+.data-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
 .controls h2,
 .overview h2,
 .details h2 {
@@ -80,12 +86,12 @@ fieldset {
 }
 
 .buttons {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
 button {
-  flex: 1;
   padding: 0.75rem;
   border: none;
   border-radius: 8px;
@@ -103,6 +109,11 @@ button:hover {
 
 button:active {
   transform: translateY(1px);
+}
+
+.secondary {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5f7fa;
 }
 
 .card-grid {
@@ -134,43 +145,51 @@ button:active {
   font-size: 0.95rem;
 }
 
-.table {
+.detail-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-card {
+  background: rgba(8, 16, 32, 0.9);
+  border-radius: 10px;
+  border: 1px solid rgba(136, 192, 255, 0.2);
+  padding: 1rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: 200px 1fr;
   gap: 0.75rem;
-  background: rgba(8, 16, 32, 0.9);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.75rem 1rem;
 }
 
-.row.header {
-  background: transparent;
-  border: none;
-  padding: 0;
-  font-weight: 600;
+.detail-card h3 {
+  margin: 0;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #c5e1ff;
+}
+
+.detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.metric-label {
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
   color: rgba(245, 247, 250, 0.7);
 }
 
-.cell.key {
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 0.85rem;
-  color: #9ac8ff;
-}
-
-.cell.value pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
+.metric-value {
+  font-size: 0.95rem;
   font-family: "Fira Code", "Source Code Pro", monospace;
-  font-size: 0.9rem;
+  color: #f5f7fa;
 }
 
 @media (max-width: 960px) {
@@ -178,7 +197,7 @@ button:active {
     grid-template-columns: 1fr;
   }
 
-  .row {
-    grid-template-columns: 1fr;
+  .buttons {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   }
 }

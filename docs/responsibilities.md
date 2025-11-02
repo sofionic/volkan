@@ -10,6 +10,7 @@ This document clarifies which component owns specific duties in the Stargate tel
 | Normalize heterogeneous payloads | I | **R/A** once implemented | C | I |
 | Validate payload schema | C | C | **R/A** | I |
 | Buffer and fan out telemetry | I | C | **R/A** | I |
+| Auto-start support processes | **R** (mock script) | C | **R/A** (process orchestrator) | **R** (web dashboard) |
 | Expose gRPC streaming API | I | I | **R/A** | C |
 | Initiate/stop telemetry sessions | I | I | C | **R** |
 | Visualize received telemetry | I | I | I | **R** |
@@ -33,6 +34,7 @@ flowchart LR
         S2[Payload validation]
         S3[gRPC broadcast]
         S4[Navigation log persistence]
+        S5[Python process orchestrator]
     end
     subgraph Client[Telemetry Clients]
         C1[Operator controls (CLI)]
@@ -47,8 +49,10 @@ flowchart LR
     C1 --> C2
     C2 --> C3
     S4 -. optional storage .- C3
+    S5 --> M1
+    S5 --> C2
 ```
 
 The swimlane diagram reinforces that Stargate remains the authoritative bridge between ingestion and clients, while the navigation log (Captain's Log) is co-owned by the service (for retention) and the client (for authoring entries).
 
-The new web dashboard shares responsibility with the CLI for presenting telemetry. It focuses on rich visual filtering, leaving scripted diagnostics and Captain's Log authoring to the console experience.
+The new web dashboard shares responsibility with the CLI for presenting telemetry. It focuses on rich visual filtering, leaving scripted diagnostics and Captain's Log authoring to the console experience. The refreshed layout keeps controls on the left, while capsule overview cards and detailed subsystem metrics share a unified column so operators can correlate summaries with raw values at a glance.

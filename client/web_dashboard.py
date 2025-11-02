@@ -123,6 +123,9 @@ class TelemetryHub:
             session.active = True
         elif action == "stop":
             session.active = False
+        elif action == "quit":
+            session.active = False
+            await session.websocket.close(code=1000, reason="Client requested shutdown")
 
     async def _consume(self) -> None:
         """Background task that consumes the gRPC stream and broadcasts data."""

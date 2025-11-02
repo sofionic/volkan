@@ -125,7 +125,9 @@ to filter for a specific vehicle. The first execution generates Python gRPC stub
 
 ### 4. Browse the web dashboard
 
-The FastAPI server started in step 1 listens on `http://127.0.0.1:8000`. Open the URL in a browser to view the dashboard:
+The FastAPI server started in step 1 listens on `http://127.0.0.1:8000` by default. If the port is already occupied, the
+launcher will advance to the next free port and print a message showing the active address. Open the URL in a browser to
+view the dashboard:
 
 * **Controls column** – choose the spacecraft ID, toggle subsystem checkboxes, and issue `Start`, `Stop`, or `Quit` commands.
 * **Capsule overview** – card-based summary of life support, navigation, power, propulsion, and thermal highlights.
@@ -148,7 +150,8 @@ docker compose up --build
 
 * `transceiver` – Python container publishing UDP telemetry toward Stargate.
 * `stargate` – .NET 8 container hosting the gRPC service (with Python automation disabled).
-* `dashboard` – FastAPI WebSocket bridge serving the web UI on http://localhost:8000.
+* `dashboard` – FastAPI WebSocket bridge serving the web UI on http://localhost:8000 by default (set `DASHBOARD_PORT` to
+  change it).
 
 The first run builds each image; subsequent runs can use `docker compose up` without `--build`. Stop everything with
 `docker compose down`. Because the services share an internal Docker network, no additional wiring is required—open

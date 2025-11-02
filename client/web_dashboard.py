@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import socket
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -27,6 +28,33 @@ from telemetry_pb2_grpc import TelemetryServiceStub  # type: ignore  # noqa: E40
 
 
 LOGGER = logging.getLogger("telemetry.web")
+
+
+def _is_port_available(host: str, port: int) -> bool:
+    """Return True if the dashboard can bind to the requested TCP port."""
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((host, port))
+    except OSError:
+        return False
+
+    return True
+
+
+def _select_port(host: str, requested_port: int, attempts: int = 20) -> int:
+    """Pick an available port, scanning successive numbers if needed."""
+
+    port = requested_port
+    for _ in range(attempts):
+        if _is_port_available(host, port):
+            return port
+        port += 1
+
+    raise RuntimeError(
+        f"Unable to find a free port starting at {requested_port} after {attempts} attempts"
+    )
 
 
 def _default_channels() -> Set[str]:
@@ -234,10 +262,23 @@ def main() -> None:
 
     import uvicorn
 
+    host = os.getenv("DASHBOARD_HOST", "127.0.0.1")
+    requested_port = int(os.getenv("DASHBOARD_PORT", "8000"))
+
+    port = _select_port(host, requested_port)
+
+    if port != requested_port:
+        print(
+            "Dashboard port {requested} is already in use. Starting on {actual} instead.".format(
+                requested=requested_port,
+                actual=port,
+            )
+        )
+
     uvicorn.run(
         "web_dashboard:app",
-        host=os.getenv("DASHBOARD_HOST", "127.0.0.1"),
-        port=int(os.getenv("DASHBOARD_PORT", "8000")),
+        host=host,
+        port=port,
         reload=False,
     )
 

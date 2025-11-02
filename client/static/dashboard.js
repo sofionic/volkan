@@ -16,7 +16,7 @@ let shouldReconnect = true;
 let pendingStart = false;
 
 const channelTitles = {
-  lifeSupport: 'Life Support',
+  life_support: 'Life Support',
   crew: 'Crew Health',
   navigation: 'Navigation',
   power: 'Power',
@@ -27,7 +27,7 @@ const channelTitles = {
 };
 
 const channelOrder = [
-  'lifeSupport',
+  'life_support',
   'crew',
   'navigation',
   'power',
@@ -38,7 +38,7 @@ const channelOrder = [
 ];
 
 const detailFormatters = {
-  lifeSupport: (value) => [
+  life_support: (value) => [
     { label: 'Cabin Pressure', value: formatNumeric(value.cabin_pressure_kpa, 1, 'kPa') },
     { label: 'Cabin Temp', value: formatNumeric(value.cabin_temperature_c, 1, '°C') },
     { label: 'Oxygen', value: formatNumeric(value.oxygen_percent, 1, '%') },
@@ -194,7 +194,7 @@ function formatBloodPressure(systolic, diastolic) {
 function renderOverview(payload) {
   capsuleStatus.innerHTML = '';
   const groups = {
-    lifeSupport: (value) =>
+    life_support: (value) =>
       `Cabin ${formatNumeric(value.cabin_pressure_kpa, 1, 'kPa')} / ${formatNumeric(value.cabin_temperature_c, 1, '°C')}\nO₂ ${formatNumeric(value.oxygen_percent, 1, '%')}`,
     navigation: (value) =>
       `${formatNumeric(value.velocity_kps, 2, 'km/s')} at ${formatNumeric(value.altitude_km, 0, 'km')}\nRoll/Pitch/Yaw ${formatNumeric(value.roll_deg, 1, '°')} / ${formatNumeric(value.pitch_deg, 1, '°')} / ${formatNumeric(value.yaw_deg, 1, '°')}`,

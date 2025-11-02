@@ -33,7 +33,7 @@ def _default_channels() -> Set[str]:
     """Return the default telemetry channel selection for new sessions."""
 
     return {
-        "lifeSupport",
+        "life_support",
         "navigation",
         "power",
         "propulsion",

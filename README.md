@@ -82,7 +82,9 @@ dotnet run --project stargate/StargateService/StargateService.csproj
 Stargate now starts the BLonQ transceiver mock and the FastAPI dashboard automatically using the Python executable on your PATH.
 Ensure the dependencies from `client/requirements.txt` are installed for that interpreter so the helper processes boot cleanly.
 You will see log entries confirming each helper process and their PIDs—mirroring how a packaged `.exe` orchestrates the full
-stack on an operator workstation.
+stack on an operator workstation. If the configured executable is missing, Stargate now falls back through `python`, `python3`,
+and `py` (Windows) before giving up, and the logs will call out each candidate that fails so you can adjust the
+`PythonAutomation__PythonExecutable` override as needed.
 
 * **Need to launch with the Windows `py` launcher?** Override the executable and interpreter arguments when starting Stargate:
 

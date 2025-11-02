@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -96,7 +97,9 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
         return Task.CompletedTask;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Release process handles that remain when the orchestrator is disposed.
+    /// </summary>
     public void Dispose()
     {
         foreach (var process in _processes)
@@ -114,10 +117,6 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
             _logger.LogWarning("Skipping Python process with no script configured.");
             return null;
         }
-
-        var pythonExecutable = string.IsNullOrWhiteSpace(_options.PythonExecutable)
-            ? "python"
-            : _options.PythonExecutable;
 
         var baseDirectory = ResolveBaseDirectory();
         var workingDirectory = ResolveWorkingDirectory(baseDirectory, processOptions.WorkingDirectory);
@@ -152,44 +151,66 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
 
         var arguments = argumentsBuilder.ToString();
 
-        var startInfo = new ProcessStartInfo
+        foreach (var candidate in BuildExecutableCandidates())
         {
-            FileName = pythonExecutable,
-            Arguments = arguments,
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-        };
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = candidate,
+                    Arguments = arguments,
+                    WorkingDirectory = workingDirectory,
+                    UseShellExecute = false,
+                };
 
-        var environmentVariables = processOptions.Environment ?? new Dictionary<string, string>();
+                var environmentVariables = processOptions.Environment ?? new Dictionary<string, string>();
 
-        foreach (var pair in environmentVariables)
-        {
-            startInfo.Environment[pair.Key] = pair.Value;
+                foreach (var pair in environmentVariables)
+                {
+                    startInfo.Environment[pair.Key] = pair.Value;
+                }
+
+                startInfo.Environment["PYTHONUNBUFFERED"] = "1";
+
+                var process = new Process
+                {
+                    StartInfo = startInfo,
+                    EnableRaisingEvents = true,
+                };
+
+                if (!process.Start())
+                {
+                    _logger.LogWarning(
+                        "Python process {Name} failed to start when using {Executable}.",
+                        processOptions.Name,
+                        candidate);
+                    process.Dispose();
+                    continue;
+                }
+
+                _logger.LogInformation(
+                    "Started Python process {Name} (PID {Pid}) using {Executable} {Arguments}",
+                    processOptions.Name,
+                    process.Id,
+                    candidate,
+                    arguments);
+
+                return process;
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode == 2)
+            {
+                _logger.LogWarning(
+                    "Python executable {Executable} was not found on PATH while launching {Name}.",
+                    candidate,
+                    processOptions.Name);
+            }
         }
 
-        startInfo.Environment["PYTHONUNBUFFERED"] = "1";
+        _logger.LogError(
+            "Unable to launch Python process {Name}. No suitable interpreter was found. Configure PythonAutomation:PythonExecutable or install Python.",
+            processOptions.Name);
 
-        var process = new Process
-        {
-            StartInfo = startInfo,
-            EnableRaisingEvents = true,
-        };
-
-        if (!process.Start())
-        {
-            _logger.LogWarning("Python process {Name} failed to start.", processOptions.Name);
-            process.Dispose();
-            return null;
-        }
-
-        _logger.LogInformation(
-            "Started Python process {Name} (PID {Pid}) using {Executable} {Arguments}",
-            processOptions.Name,
-            process.Id,
-            pythonExecutable,
-            arguments);
-
-        return process;
+        return null;
     }
 
     private string ResolveBaseDirectory()
@@ -220,5 +241,35 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
         }
 
         return Path.GetFullPath(Path.Combine(baseDirectory, script));
+    }
+
+    private IEnumerable<string> BuildExecutableCandidates()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(_options.PythonExecutable))
+        {
+            yield return _options.PythonExecutable;
+            seen.Add(_options.PythonExecutable);
+        }
+
+        foreach (var candidate in GetDefaultCandidates())
+        {
+            if (seen.Add(candidate))
+            {
+                yield return candidate;
+            }
+        }
+    }
+
+    private static IEnumerable<string> GetDefaultCandidates()
+    {
+        yield return "python";
+        yield return "python3";
+
+        if (OperatingSystem.IsWindows())
+        {
+            yield return "py";
+        }
     }
 }

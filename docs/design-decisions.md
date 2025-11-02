@@ -25,7 +25,7 @@ engineering raw sensor IDs.
 
 ## Configuration
 
-`appsettings.json` holds the UDP host/port, Python automation settings, and Kestrel configuration. Environment variables can override them (default ASP.NET Core behaviour). The Python section now accepts interpreter arguments so Windows operators can drive the automation via the `py` launcher (for example `PythonAutomation__Processes__0__InterpreterArguments=-3.14`).
+`appsettings.json` holds the UDP host/port, Python automation settings, and Kestrel configuration. Environment variables can override them (default ASP.NET Core behaviour). The Python section now accepts interpreter arguments so Windows operators can drive the automation via the `py` launcher (for example `PythonAutomation__Processes__0__InterpreterArguments=-3.14`). When the configured interpreter is missing, the orchestrator now walks a fallback list (`python`, `python3`, `py`) before giving up, reducing setup friction on machines where Python was installed with different launchers.
 
 ## Client interactivity
 

@@ -22,53 +22,18 @@ The staged approach keeps Stargate focused on validation, buffering, and gRPC fa
 
 ```
 .
-├── client/                 # Minimal telemetry front-end (Python)
+├── client/                 # Minimal telemetry front-end
 ├── docs/                   # Design documentation
-├── stargate/               # C# Stargate gRPC service (Visual Studio solution lives here)
-└── transceiver/            # BLonQ-Transceiver mock implementation (Python)
+├── stargate/               # C# Stargate gRPC service
+└── transceiver/            # BLonQ-Transceiver mock implementation
 ```
-
-> **Tip for Visual Studio users**
-> When you clone the repository with Visual Studio, Solution Explorer focuses on `stargate/Stargate.sln`, so only the C#
-> projects appear in that view. The Python folders (`client/`, `transceiver/`) are still present on disk under the repository
-> root—for example, `C:\Users\Volkan\source\repos\StarGate\client`. Open the folder in File Explorer or use Visual Studio’s
-> **Git Changes** window to browse them, and run the Python commands from that root path.
 
 ## Prerequisites
 
-* [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download) (tested with Visual Studio 2022 v17.14.19)
-* Visual Studio 2022 17.14.19+ (optional, for developers who prefer the IDE)
+* [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download) (aligns with Visual Studio 2022 v17.5.4 expectations)
+* Visual Studio 2022 17.5.4+ (optional, for developers who prefer the IDE)
 * Python 3.10+
-
-### Install the Python dependencies
-
-Always invoke `pip` via the Python interpreter you intend to use so the
-packages land in the matching environment.
-
-* **Windows (using the Python launcher):**
-
-  ```powershell
-  py -3.14 -m pip install -r client/requirements.txt
-  ```
-
-  Replace `3.14` with whatever interpreter version you have available. If
-  you have multiple versions installed, the launcher will pick the one you
-  specify explicitly.
-
-* **macOS/Linux:**
-
-  ```bash
-  python3.14 -m pip install -r client/requirements.txt
-  ```
-
-  Swap in your installed version (e.g. `python3.11`) if `python3.14` is not
-  present. Should the interpreter report that `pip` is missing, bootstrap it
-  first via `python3.14 -m ensurepip --upgrade` (or the equivalent for your
-  version) and then rerun the install command above.
-
-Using `python -m pip` ensures the gRPC tooling is installed exactly where the
-client and transceiver scripts expect it, regardless of how many Python
-versions you have on the machine.
+* `pip install -r client/requirements.txt`
 
 ## Runbook
 
@@ -121,15 +86,6 @@ python -m compileall client transceiver
 > The Codespaces/container environment that accompanies this repository does not ship with the .NET SDK and outbound package
 > downloads are blocked, so `dotnet build` will emit `command not found: dotnet`. Execute the .NET steps on your workstation
 > (Visual Studio 2022 17.14.19+ with the .NET 8 workload) or install the SDK manually if you are running outside a restricted
-> network. The Python check runs successfully in either environment.
-
-## Telemetry schema
-
-Both the service and client share a common protocol buffer definition located at:
-
-* `stargate/StargateService/Proto/telemetry.proto`
-* `client/telemetry.proto`
-
 Telemetry is grouped into subsystem envelopes so Stargate and downstream
 consumers can reason about the spacecraft holistically:
 

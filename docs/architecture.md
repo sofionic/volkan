@@ -41,4 +41,10 @@ The UDP listener (`UdpTelemetryListener`) binds to the configured port, deserial
 
 The telemetry gateway is intentionally left as a future deliverable. Its role is to host protocol-specific adapters (e.g. ADS.NET, CAN, UART) and publish normalised telemetry toward Stargate using the same UDP contract exercised by the mock today. This keeps the Stargate implementation stable while enabling heterogeneous sensor networks.
 
+Telemetry payloads are grouped by subsystem (life support, crew, navigation,
+power, thermal, propulsion, communications, structural). Stargate treats each
+group as a cohesive block, so future gateway adapters can translate Beckhoff or
+microcontroller data into the shared envelopes without the service needing to
+understand individual sensor identifiers.
+
 The telemetry client connects over gRPC using HTTP/2, authenticates anonymously (prototype), and prints each telemetry record in real time. Users can toggle the streaming session on/off to demonstrate backpressure handling and resource cleanup. When operators submit navigation or Captain's Log notes, the client relays them to Stargate so the service can take responsibility for storage once that capability is implemented.

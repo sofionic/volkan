@@ -85,15 +85,23 @@ python -m compileall client transceiver
 > **Note**
 > The Codespaces/container environment that accompanies this repository does not ship with the .NET SDK and outbound package
 > downloads are blocked, so `dotnet build` will emit `command not found: dotnet`. Execute the .NET steps on your workstation
-> (Visual Studio 2022 17.5.4+ with the .NET 8 workload) or install the SDK manually if you are running outside a restricted
-> network. The Python check runs successfully in either environment.
+> (Visual Studio 2022 17.14.19+ with the .NET 8 workload) or install the SDK manually if you are running outside a restricted
+Telemetry is grouped into subsystem envelopes so Stargate and downstream
+consumers can reason about the spacecraft holistically:
 
-## Telemetry schema
+| Channel | Sample fields |
+|---------|---------------|
+| Life support | Cabin pressure/temperature, oxygen %, CO₂ ppm, humidity, airflow, water & food reserves. |
+| Crew monitoring | Heart rate, blood pressure, body temperature, activity level, comms status. |
+| Navigation | Velocity, altitude, geolocation, roll/pitch/yaw, apoapsis/periapsis. |
+| Power | Battery state of charge, solar array output, load current. |
+| Thermal | Hull/radiator temperatures, heater state, coolant loop pressure. |
+| Propulsion | Main engine status, fuel reserves, RCS propellant, acceleration. |
+| Communications | Signal strength, uplink/downlink throughput, active relay. |
+| Structural health | Vibrations, hull stress, warning status. |
 
-Both the service and client share a common protocol buffer definition located at:
-
-* `stargate/StargateService/Proto/telemetry.proto`
-* `client/telemetry.proto`
+The BLonQ mock populates each channel with synthetic values today; the planned
+gateway will substitute real sensor data without changing Stargate’s contract.
 
 ## Documentation
 
@@ -118,15 +126,15 @@ follow the sequence below:
    git push -u origin main   # first publish of the current history
    ```
 
-   *Ersetze `<your-remote-url>` mit der echten Adresse deines neuen Repositories.*
-   Für GitHub sieht sie beispielsweise so aus:
+   *Replace `<your-remote-url>` with the actual address of your new repository.*
+   For GitHub it typically looks like:
 
    ```bash
-   git remote add origin https://github.com/dein-benutzername/tec-stargate.git
+   git remote add origin https://github.com/your-username/tec-stargate.git
    ```
 
-   Nach dem `git push` kannst du mit `git remote -v` prüfen, ob der Remote korrekt
-   eingetragen ist und auf dieselbe URL zeigt.
+   After `git push`, you can run `git remote -v` to verify that the remote is
+   registered and points at the expected URL.
 
 3. **Clone from Visual Studio or other tools.** Once the push succeeds, Visual Studio’s **Git > Clone…** dialog can point to the
    new URL so you pull the same code onto your workstation without manual copying.

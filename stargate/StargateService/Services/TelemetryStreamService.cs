@@ -45,15 +45,7 @@ public sealed class TelemetryStreamService : TelemetryService.TelemetryServiceBa
                     continue;
                 }
 
-                var message = new Telemetry
-                {
-                    // Copy the internal payload into the gRPC contract shape.
-                    SpacecraftId = payload.SpacecraftId,
-                    TimestampMs = payload.TimestampMs,
-                    CabinPressureKpa = payload.CabinPressureKpa,
-                    VelocityKps = payload.VelocityKps,
-                    CabinTemperatureC = payload.CabinTemperatureC
-                };
+                var message = MapTelemetry(payload);
 
                 await responseStream.WriteAsync(message);
             }
@@ -80,5 +72,82 @@ public sealed class TelemetryStreamService : TelemetryService.TelemetryServiceBa
         }
 
         return string.Equals(requestedId, payloadId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Convert the domain telemetry payload into the gRPC contract.
+    /// </summary>
+    private static Telemetry MapTelemetry(TelemetryPayload payload)
+    {
+        return new Telemetry
+        {
+            SpacecraftId = payload.SpacecraftId,
+            TimestampMs = payload.TimestampMs,
+            LifeSupport = new LifeSupport
+            {
+                CabinPressureKpa = payload.LifeSupport.CabinPressureKpa,
+                CabinTemperatureC = payload.LifeSupport.CabinTemperatureC,
+                OxygenPercent = payload.LifeSupport.OxygenPercent,
+                Co2Ppm = payload.LifeSupport.Co2Ppm,
+                HumidityPercent = payload.LifeSupport.HumidityPercent,
+                AirflowMps = payload.LifeSupport.AirflowMps,
+                WaterSupplyLiters = payload.LifeSupport.WaterSupplyLiters,
+                FoodSupplyDays = payload.LifeSupport.FoodSupplyDays
+            },
+            Crew = new Crew
+            {
+                HeartRateBpm = payload.Crew.HeartRateBpm,
+                BloodPressureSystolic = payload.Crew.BloodPressureSystolic,
+                BloodPressureDiastolic = payload.Crew.BloodPressureDiastolic,
+                BodyTemperatureC = payload.Crew.BodyTemperatureC,
+                ActivityLevel = payload.Crew.ActivityLevel,
+                CommStatus = payload.Crew.CommunicationStatus
+            },
+            Navigation = new Navigation
+            {
+                VelocityKps = payload.Navigation.VelocityKps,
+                AltitudeKm = payload.Navigation.AltitudeKm,
+                LatitudeDeg = payload.Navigation.LatitudeDeg,
+                LongitudeDeg = payload.Navigation.LongitudeDeg,
+                RollDeg = payload.Navigation.RollDeg,
+                PitchDeg = payload.Navigation.PitchDeg,
+                YawDeg = payload.Navigation.YawDeg,
+                ApoapsisKm = payload.Navigation.ApoapsisKm,
+                PeriapsisKm = payload.Navigation.PeriapsisKm
+            },
+            Power = new Power
+            {
+                BatteryChargePercent = payload.Power.BatteryChargePercent,
+                SolarOutputKw = payload.Power.SolarOutputKw,
+                LoadCurrentAmp = payload.Power.LoadCurrentAmp
+            },
+            Thermal = new Thermal
+            {
+                HullTempC = payload.Thermal.HullTemperatureC,
+                RadiatorTempC = payload.Thermal.RadiatorTemperatureC,
+                HeaterStatus = payload.Thermal.HeaterStatus,
+                CoolantLoopPressureKpa = payload.Thermal.CoolantLoopPressureKpa
+            },
+            Propulsion = new Propulsion
+            {
+                MainEngineStatus = payload.Propulsion.MainEngineStatus,
+                FuelLevelPercent = payload.Propulsion.FuelLevelPercent,
+                RcsFuelPercent = payload.Propulsion.RcsFuelPercent,
+                AccelerationMps2 = payload.Propulsion.AccelerationMps2
+            },
+            Communications = new Communications
+            {
+                SignalStrengthDb = payload.Communications.SignalStrengthDb,
+                DownlinkRateMbps = payload.Communications.DownlinkRateMbps,
+                UplinkRateMbps = payload.Communications.UplinkRateMbps,
+                ActiveRelay = payload.Communications.ActiveRelay
+            },
+            Structural = new Structural
+            {
+                VibrationMms = payload.Structural.VibrationMms,
+                HullStressMpa = payload.Structural.HullStressMpa,
+                WarningStatus = payload.Structural.WarningStatus
+            }
+        };
     }
 }

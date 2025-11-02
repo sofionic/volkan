@@ -45,15 +45,83 @@ def ensure_proto_generated() -> None:
         ) from exc
 
 
-def format_measurement(message) -> str:
-    """Format a telemetry message into a single human-readable line."""
+def _has_field(message, field: str) -> bool:
+    """Return True when the protobuf message has the given sub-field set."""
 
-    return (
-        f"[{message.spacecraft_id}] t={message.timestamp_ms}ms "
-        f"pressure={message.cabin_pressure_kpa:.2f}kPa "
-        f"velocity={message.velocity_kps:.3f}km/s "
-        f"temp={message.cabin_temperature_c:.2f}°C"
-    )
+    try:
+        return message.HasField(field)
+    except ValueError:
+        # Scalar fields cannot be probed via HasField; assume presence for defaults.
+        return False
+
+
+def format_measurement(message) -> str:
+    """Format a telemetry message into a human-readable, channelised summary."""
+
+    parts = [f"[{message.spacecraft_id}] t={message.timestamp_ms}ms"]
+
+    if _has_field(message, "life_support"):
+        life_support = message.life_support
+        parts.append(
+            "life_support="
+            f"{life_support.cabin_pressure_kpa:.1f}kPa/{life_support.cabin_temperature_c:.1f}°C "
+            f"O2={life_support.oxygen_percent:.1f}% CO2={life_support.co2_ppm:.0f}ppm"
+        )
+
+    if _has_field(message, "navigation"):
+        navigation = message.navigation
+        parts.append(
+            "nav="
+            f"{navigation.velocity_kps:.3f}km/s @{navigation.altitude_km:.0f}km "
+            f"att=({navigation.roll_deg:.1f},{navigation.pitch_deg:.1f},{navigation.yaw_deg:.1f})"
+        )
+
+    if _has_field(message, "power"):
+        power = message.power
+        parts.append(
+            "power="
+            f"battery {power.battery_charge_percent:.0f}% "
+            f"solar {power.solar_output_kw:.1f}kW"
+        )
+
+    if _has_field(message, "propulsion"):
+        propulsion = message.propulsion
+        parts.append(
+            "propulsion="
+            f"main={propulsion.main_engine_status} fuel={propulsion.fuel_level_percent:.0f}% "
+            f"rcs={propulsion.rcs_fuel_percent:.0f}% accel={propulsion.acceleration_mps2:.3f}m/s²"
+        )
+
+    if _has_field(message, "thermal"):
+        thermal = message.thermal
+        parts.append(
+            "thermal="
+            f"hull {thermal.hull_temp_c:.0f}°C radiator {thermal.radiator_temp_c:.0f}°C heater={thermal.heater_status}"
+        )
+
+    if _has_field(message, "crew"):
+        crew = message.crew
+        parts.append(
+            "crew="
+            f"HR {crew.heart_rate_bpm:.0f}bpm BP {crew.blood_pressure_systolic:.0f}/{crew.blood_pressure_diastolic:.0f} "
+            f"activity={crew.activity_level}"
+        )
+
+    if _has_field(message, "communications"):
+        comms = message.communications
+        parts.append(
+            "comms="
+            f"{comms.signal_strength_db:.0f}dB down={comms.downlink_rate_mbps:.0f}Mbps up={comms.uplink_rate_mbps:.0f}Mbps"
+        )
+
+    if _has_field(message, "structural"):
+        structural = message.structural
+        parts.append(
+            "structural="
+            f"vibe {structural.vibration_mms:.2f}mm/s stress {structural.hull_stress_mpa:.0f}MPa status={structural.warning_status}"
+        )
+
+    return " | ".join(parts)
 
 
 class TelemetryStreamController:

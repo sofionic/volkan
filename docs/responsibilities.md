@@ -4,7 +4,7 @@ This document clarifies which component owns specific duties in the Stargate tel
 
 ## RACI snapshot
 
-| Activity | BLonQ Mock | Telemetry Gateway | Stargate Service | Telemetry Client |
+| Activity | BLonQ Mock | Telemetry Gateway | Stargate Service | Telemetry Clients (CLI & Web) |
 |----------|------------|-------------------|------------------|------------------|
 | Generate telemetry samples | **R**esponsible (simulated) | C (future adapters) | I | I |
 | Normalize heterogeneous payloads | I | **R/A** once implemented | C | I |
@@ -34,9 +34,9 @@ flowchart LR
         S3[gRPC broadcast]
         S4[Navigation log persistence]
     end
-    subgraph Client[Telemetry Client]
-        C1[Operator controls]
-        C2[Visualise telemetry]
+    subgraph Client[Telemetry Clients]
+        C1[Operator controls (CLI)]
+        C2[Visualise telemetry (CLI/Web)]
         C3[Append to Captain's Log]
     end
 
@@ -50,3 +50,5 @@ flowchart LR
 ```
 
 The swimlane diagram reinforces that Stargate remains the authoritative bridge between ingestion and clients, while the navigation log (Captain's Log) is co-owned by the service (for retention) and the client (for authoring entries).
+
+The new web dashboard shares responsibility with the CLI for presenting telemetry. It focuses on rich visual filtering, leaving scripted diagnostics and Captain's Log authoring to the console experience.

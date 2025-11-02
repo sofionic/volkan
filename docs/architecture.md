@@ -21,8 +21,9 @@ flowchart LR
         D[gRPC Endpoint]
         L[Captain's Log API]
     end
-    subgraph Client[Telemetry CLI]
-        E[Interactive gRPC client]\nPython
+    subgraph Client[Telemetry Front-Ends]
+        E[Interactive CLI]\nPython
+        W[FastAPI Web dashboard]\nWebSocket broadcast
         N[Captain's Log entries]
     end
 
@@ -33,6 +34,7 @@ flowchart LR
     B --> C
     C -- push --> D
     D -- gRPC stream --> E
+    D -- gRPC stream --> W
     E --> N
     N -. persist requests .-> L
 ```
@@ -47,4 +49,4 @@ group as a cohesive block, so future gateway adapters can translate Beckhoff or
 microcontroller data into the shared envelopes without the service needing to
 understand individual sensor identifiers.
 
-The telemetry client connects over gRPC using HTTP/2, authenticates anonymously (prototype), and prints each telemetry record in real time. Users can toggle the streaming session on/off to demonstrate backpressure handling and resource cleanup. When operators submit navigation or Captain's Log notes, the client relays them to Stargate so the service can take responsibility for storage once that capability is implemented.
+The telemetry front-ends share the same gRPC contract. The CLI offers a lightweight, scriptable console for operators, while the web dashboard runs a FastAPI bridge that relays gRPC telemetry to browsers over WebSockets for richer visualisation and channel filtering. Users can toggle the streaming session on/off to demonstrate backpressure handling and resource cleanup. When operators submit navigation or Captain's Log notes, the client relays them to Stargate so the service can take responsibility for storage once that capability is implemented.

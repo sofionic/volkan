@@ -6,6 +6,7 @@
     * _Operational note_: the hosted container used for this documentation cannot download the .NET SDK, so `dotnet` commands must be run on a workstation that has the SDK installed.
 * **UDP JSON payloads** – JSON keeps the mock/lightweight prototype language-agnostic and easy to inspect while keeping the focus on the Stargate service.
 * **Python for mock & client** – Python provides rapid prototyping speed, strong UDP/gRPC library support, and ease of scripting for operators. The language choice ensures the mock and client can evolve quickly (e.g. swapping the random generator for a gateway feed) without impacting the .NET Stargate core.
+* **FastAPI web dashboard** – FastAPI + WebSockets let us surface telemetry in a browser while reusing the existing Python gRPC client stack. Operators get a richer UI without introducing a separate JavaScript build pipeline.
 
 ## Telemetry fan-out strategy
 
@@ -26,7 +27,7 @@ engineering raw sensor IDs.
 
 ## Client interactivity
 
-The telemetry client exposes simple `start`, `stop`, and `quit` commands. While minimal, this flow demonstrates the Stargate API contract and provides a clean extension point for richer UIs (plotting, dashboards) in the future.
+The console client exposes simple `start`, `stop`, and `quit` commands, keeping scripted diagnostics lightweight. The new FastAPI dashboard runs alongside it to provide channel filtering, capsule status summaries, and a control surface in the browser without duplicating Stargate logic.
 
 ## Prototype boundaries
 
@@ -49,15 +50,17 @@ flowchart TB
         S2[gRPC fan-out]
         S3[Navigation log API]
     end
-    subgraph Client[Telemetry Client]
+    subgraph Client[Telemetry Clients]
         C1[Console stream]
-        C2[Captain's Log authoring]
+        C2[Web dashboard]
+        C3[Captain's Log authoring]
     end
 
     M1 -- Today --> S1
     G1 -. Planned .-> G2 -. Normalized feed .-> S1
     S2 --> C1
-    S3 --> C2
+    S2 --> C2
+    S3 --> C3
 
     classDef boundary stroke-dasharray: 5 5;
     class Mock,Gateway,Stargate,Client boundary;

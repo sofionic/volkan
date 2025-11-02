@@ -4,7 +4,7 @@ TEC's Stargate initiative connects spacecraft telemetry sources with the teams t
 
 1. **BLonQ Transceiver Mock** – emits pseudo telemetry over UDP at 250 Hz. The generator mimics the BLonQ hardware interface today but can be swapped for a gateway-fed source without altering downstream components.
 2. **Stargate Service** – a C# gRPC service that ingests UDP telemetry, validates and buffers it, then publishes streams to clients.
-3. **Telemetry Client** – an interactive CLI built with Python that can start/stop a streaming session and visualise the received data.
+3. **Telemetry Front-Ends** – Python-based operator tools: an interactive CLI for quick diagnostics and a FastAPI web dashboard for rich visualisation and channel filtering.
 4. **Telemetry Gateway (planned)** – a future adapter layer that will normalise heterogeneous PLC/microcontroller feeds before forwarding them to Stargate. Although not implemented yet, the current architecture, configuration, and documentation assume its eventual presence so the system narrative stays coherent.
 
 ## Mission overview
@@ -13,7 +13,7 @@ TEC's Stargate initiative connects spacecraft telemetry sources with the teams t
 |-----------|----------------|------------|---------|
 | BLonQ Transceiver Mock | Synthesises spacecraft telemetry samples grouped by subsystem (life support, navigation, propulsion, etc.). | UDP JSON packets → Stargate | 250 Hz core feed (subsystem aggregates may downsample internally). |
 | Stargate Service | Listens for UDP telemetry, validates payload shape, buffers to fan out over gRPC streams. | UDP ingest ← mock/gateway, gRPC streaming → clients | Near real-time; bounded in-memory cache. |
-| Telemetry Client | Allows operators to start/stop streams and observe live telemetry for chosen spacecraft IDs. | gRPC streaming ← Stargate | On-demand user session. |
+| Telemetry Front-Ends | CLI for quick diagnostics plus a FastAPI web dashboard for rich filtering and visualisation. | gRPC streaming ← Stargate | On-demand user session. |
 | Telemetry Gateway (planned) | Bridge for Beckhoff ADS.NET, microcontroller protocols, or other field buses. Normalises messages into the shared telemetry envelope before Stargate. | Adapter-specific ingress (ADS, CAN, UART, etc.) → UDP/gRPC toward Stargate | Matches upstream device cadence; can buffer/downsample. |
 
 The staged approach keeps Stargate focused on validation, buffering, and gRPC fan-out while leaving room for realistic heterogeneous sensor networks in later iterations.
@@ -72,7 +72,7 @@ versions you have on the machine.
 
 ## Runbook
 
-Open three terminals and run the commands below in order.
+Open three terminals (four if you want the optional CLI) and run the commands below in order.
 
 ### 1. Start the BLonQ Transceiver mock
 
@@ -100,7 +100,7 @@ The service listens for UDP telemetry on port `6000` and exposes the gRPC endpoi
 
 Configuration is located in `stargate/StargateService/appsettings.json`.
 
-### 3. Run the telemetry client
+### 3. (Optional) Run the telemetry CLI
 
 ```bash
 python client/telemetry_client.py --host 127.0.0.1 --port 5000
@@ -109,6 +109,23 @@ python client/telemetry_client.py --host 127.0.0.1 --port 5000
 The CLI supports the commands `start`, `stop`, and `quit`. By default it subscribes to all spacecraft. To filter for a specific spacecraft, pass `--spacecraft-id <ID>`.
 
 The first execution generates Python gRPC stubs from `client/telemetry.proto` (requires `grpcio-tools`).
+
+### 4. Launch the web dashboard
+
+```bash
+python client/web_dashboard.py
+```
+
+The FastAPI server listens on `http://127.0.0.1:8000` by default. Open the URL in a browser to view the dashboard:
+
+* Use the **Spacecraft ID** field to focus on a single vehicle (leave blank for all telemetry).
+* Toggle subsystem checkboxes to filter the telemetry channels rendered in the detailed view.
+* Click **Start** to begin streaming updates and **Stop** to pause without closing the page.
+
+Environment variables allow you to bind the server elsewhere:
+
+* `DASHBOARD_HOST` (default `127.0.0.1`)
+* `DASHBOARD_PORT` (default `8000`)
 
 ## Verification & testing
 

@@ -217,10 +217,15 @@ async def main_async() -> None:
 
     controller = TelemetryStreamController(args.host, args.port, args.spacecraft_id)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         # Ensure Ctrl+C closes the stream cleanly instead of leaving hanging tasks.
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(controller.close()))
+        try:
+            loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(controller.close()))
+        except NotImplementedError:
+            # Windows event loops prior to Python 3.11 and alternative runtimes do not
+            # support signal handlers; fall back to default console behaviour.
+            break
 
     await interactive_loop(controller)
 

@@ -2,7 +2,7 @@
 
 ## Technology choices
 
-* **Stargate service in C# / .NET 8** – matches the target runtime supported by Visual Studio 2022 v17.5.4 and keeps the project on the current long-term platform while leveraging ASP.NET Core's first-class gRPC support.
+* **Stargate service in C# / .NET 8** – matches the target runtime supported by Visual Studio 2022 v17.14.19 and keeps the project on the current long-term platform while leveraging ASP.NET Core's first-class gRPC support.
     * _Operational note_: the hosted container used for this documentation cannot download the .NET SDK, so `dotnet` commands must be run on a workstation that has the SDK installed.
 * **UDP JSON payloads** – JSON keeps the mock/lightweight prototype language-agnostic and easy to inspect while keeping the focus on the Stargate service.
 * **Python for mock & client** – Python provides rapid prototyping speed, strong UDP/gRPC library support, and ease of scripting for operators. The language choice ensures the mock and client can evolve quickly (e.g. swapping the random generator for a gateway feed) without impacting the .NET Stargate core.
@@ -10,6 +10,15 @@
 ## Telemetry fan-out strategy
 
 The Stargate service ingests telemetry on a dedicated background worker and pushes measurements into a broadcaster component backed by `Channel<T>`. Each gRPC client receives its own reader, allowing independent backpressure handling. Slow consumers are dropped if they cannot keep up to avoid blocking the ingestion loop.
+
+## Telemetry schema segmentation
+
+Telemetry is partitioned into subsystem groupings (life support, crew, navigation,
+power, thermal, propulsion, communications, structural). The JSON payload and
+the shared protobuf contract mirror this structure so the future telemetry
+gateway can map heterogeneous field inputs directly onto the same envelopes.
+Downstream services can subscribe or filter per channel without reverse
+engineering raw sensor IDs.
 
 ## Configuration
 

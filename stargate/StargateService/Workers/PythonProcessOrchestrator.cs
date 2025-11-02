@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Microsoft.Extensions.Options;
 using Stargate.Options;
 
@@ -131,9 +132,25 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
             return null;
         }
 
-        var arguments = string.IsNullOrWhiteSpace(processOptions.Arguments)
-            ? $"\"{scriptPath}\""
-            : $"\"{scriptPath}\" {processOptions.Arguments}";
+        var argumentsBuilder = new StringBuilder();
+
+        if (!string.IsNullOrWhiteSpace(processOptions.InterpreterArguments))
+        {
+            argumentsBuilder.Append(processOptions.InterpreterArguments);
+            argumentsBuilder.Append(' ');
+        }
+
+        argumentsBuilder.Append('"');
+        argumentsBuilder.Append(scriptPath);
+        argumentsBuilder.Append('"');
+
+        if (!string.IsNullOrWhiteSpace(processOptions.Arguments))
+        {
+            argumentsBuilder.Append(' ');
+            argumentsBuilder.Append(processOptions.Arguments);
+        }
+
+        var arguments = argumentsBuilder.ToString();
 
         var startInfo = new ProcessStartInfo
         {

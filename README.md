@@ -84,6 +84,18 @@ Ensure the dependencies from `client/requirements.txt` are installed for that in
 You will see log entries confirming each helper process and their PIDs—mirroring how a packaged `.exe` orchestrates the full
 stack on an operator workstation.
 
+* **Need to launch with the Windows `py` launcher?** Override the executable and interpreter arguments when starting Stargate:
+
+  ```powershell
+  set PythonAutomation__PythonExecutable=py
+  set PythonAutomation__Processes__0__InterpreterArguments=-3.14
+  set PythonAutomation__Processes__1__InterpreterArguments=-3.14
+  dotnet run --project stargate/StargateService/StargateService.csproj
+  ```
+
+  Replace `-3.14` with the desired interpreter flag (e.g. `-3.11`). These environment variables ensure the orchestrator
+  issues commands such as `py -3.14 transceiver/blonq_transceiver_mock.py` so Windows resolves the correct runtime.
+
 > **Tip**
 > To disable automation (for example, while debugging the Python tools manually), set `PythonAutomation__Enabled=false` in
 > `stargate/StargateService/appsettings.json` or export the environment variable before running `dotnet run`.
@@ -123,6 +135,9 @@ The FastAPI server started in step 1 listens on `http://127.0.0.1:8000`. Open 
 To relocate the dashboard server, edit `DASHBOARD_HOST`/`DASHBOARD_PORT` in `appsettings.json` or override those environment
 variables before launching Stargate.
 
+If the dashboard or mock fails to appear, confirm that Python is installed, the dependencies above were installed for the same
+interpreter, and that the `PythonAutomation__*` environment variables point to a valid executable/flag combination.
+
 ## Containerised deployment
 
 Build and run the full stack with Docker Compose when you prefer containers:
@@ -134,6 +149,10 @@ docker compose up --build
 * `transceiver` – Python container publishing UDP telemetry toward Stargate.
 * `stargate` – .NET 8 container hosting the gRPC service (with Python automation disabled).
 * `dashboard` – FastAPI WebSocket bridge serving the web UI on http://localhost:8000.
+
+The first run builds each image; subsequent runs can use `docker compose up` without `--build`. Stop everything with
+`docker compose down`. Because the services share an internal Docker network, no additional wiring is required—open
+`http://localhost:8000` in your browser and the dashboard will connect to the Stargate container automatically.
 
 Stop the stack with `docker compose down`. Override ports or environment variables in `docker-compose.yml` as needed.
 

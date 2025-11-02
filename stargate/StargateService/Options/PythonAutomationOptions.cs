@@ -39,6 +39,12 @@ public sealed class PythonProcessOptions
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets arguments that should be passed to the Python executable before the script path
+    /// (for example "-3.14" when launching via the Windows "py" launcher).
+    /// </summary>
+    public string InterpreterArguments { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the Python module or script path to execute.
     /// </summary>
     public string Script { get; set; } = string.Empty;

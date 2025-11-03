@@ -135,12 +135,12 @@ function ensureSocket() {
 
   socket.addEventListener('message', (event) => {
     const payload = JSON.parse(event.data);
-    if (payload.type === 'status') {
-      handleStatus(payload);
-      return;
-    }
-    renderOverview(payload);
-    renderDetails(payload);
+  if (payload.type === 'status') {
+    handleStatus(payload);
+    return;
+  }
+  renderOverview(payload);
+  renderDetails(payload);
   });
 
   socket.addEventListener('close', () => {
@@ -180,6 +180,10 @@ function sendCommand(action) {
 
 function handleStatus(message) {
   const { state } = message;
+
+  if (typeof message.spacecraft_id === 'string' && spacecraftField) {
+    spacecraftField.value = message.spacecraft_id;
+  }
 
   if (state === 'frequency_rejected') {
     if (frequencyField) {

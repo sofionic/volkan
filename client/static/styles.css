@@ -27,7 +27,7 @@ body {
 
 .layout {
   display: grid;
-  grid-template-columns: 390px 1fr;
+  grid-template-columns: 320px 1fr;
   gap: 1.5rem;
   padding: 1.5rem 2rem 3rem;
 }

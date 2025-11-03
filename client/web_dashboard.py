@@ -94,6 +94,7 @@ class TelemetryHub:
         self._stub: Optional[TelemetryServiceStub] = None
         self._task: Optional[asyncio.Task[None]] = None
         self._clients: List[ClientSession] = []
+        self._latest_payload: Optional[Dict] = None
         self._lock = asyncio.Lock()
 
     async def start(self) -> None:
@@ -133,6 +134,7 @@ class TelemetryHub:
             session,
             "connected",
             channels=sorted(session.channels),
+            spacecraft_id=session.spacecraft_id,
             frequency_hz=session.display_hz,
         )
         return session
@@ -165,16 +167,27 @@ class TelemetryHub:
             )
         elif action == "start":
             session.active = True
-            await self._send_status(session, "started")
+            session.last_sent_monotonic = 0.0
+            await self._send_status(
+                session, "started", spacecraft_id=session.spacecraft_id
+            )
+            await self._emit_latest(session, force=True)
         elif action == "stop":
             session.active = False
-            await self._send_status(session, "stopped")
+            await self._send_status(
+                session, "stopped", spacecraft_id=session.spacecraft_id
+            )
         elif action == "quit":
             session.active = False
-            await self._send_status(session, "quitting")
+            await self._send_status(
+                session,
+                "quitting",
+                spacecraft_id=session.spacecraft_id,
+            )
             await session.websocket.close(code=1000, reason="Client requested shutdown")
         elif action == "setFrequency":
             await self._update_frequency(session, payload.get("frequencyHz"))
+            await self._emit_latest(session, force=True)
 
     async def _consume(self) -> None:
         """Background task that consumes the gRPC stream and broadcasts data."""
@@ -193,6 +206,17 @@ class TelemetryHub:
                             message,
                             preserving_proto_field_name=True,
                         )
+
+                        timestamp = payload.get("timestamp_ms")
+                        if isinstance(timestamp, str):
+                            try:
+                                payload["timestamp_ms"] = int(timestamp)
+                            except ValueError:
+                                LOGGER.debug(
+                                    "Received non-integer timestamp: %s", timestamp
+                                )
+
+                        self._latest_payload = payload
                         await self._broadcast(payload)
 
                     backoff_seconds = 1.0
@@ -234,23 +258,44 @@ class TelemetryHub:
             if session.spacecraft_id and session.spacecraft_id != spacecraft_id:
                 continue
 
-            # Restrict the payload to the channels the client cares about before sending.
-            if not self._should_emit(session):
-                continue
+            await self._emit_payload(session, payload)
 
-            filtered = self._filter_payload(payload, session.channels)
-            try:
-                await session.websocket.send_text(json.dumps(filtered))
-            except (RuntimeError, WebSocketDisconnect):
-                continue
+    async def _emit_latest(self, session: ClientSession, force: bool = False) -> None:
+        """Emit the most recent payload to a session, optionally bypassing throttling."""
+
+        if not session.active or self._latest_payload is None:
+            return
+
+        await self._emit_payload(session, self._latest_payload, force=force)
+
+    async def _emit_payload(
+        self, session: ClientSession, payload: Dict, *, force: bool = False
+    ) -> None:
+        """Send a single payload to the session, applying throttling when requested."""
+
+        if not force and not self._should_emit(session):
+            return
+
+        filtered = self._filter_payload(payload, session.channels)
+        try:
+            await session.websocket.send_text(json.dumps(filtered))
+        except (RuntimeError, WebSocketDisconnect):
+            LOGGER.debug("Dropping payload for disconnected client")
 
     @staticmethod
     def _filter_payload(payload: Dict, channels: Set[str]) -> Dict:
         """Return a payload copy limited to the requested telemetry channels."""
 
+        timestamp = payload.get("timestamp_ms")
+        if isinstance(timestamp, str):
+            try:
+                timestamp = int(timestamp)
+            except ValueError:
+                LOGGER.debug("Unable to parse timestamp %s", timestamp)
+
         filtered = {
             "spacecraft_id": payload.get("spacecraft_id"),
-            "timestamp_ms": payload.get("timestamp_ms"),
+            "timestamp_ms": timestamp,
         }
 
         for channel, value in payload.items():
@@ -298,6 +343,7 @@ class TelemetryHub:
                 session,
                 "frequency_rejected",
                 reason="Frequency must be an integer between 1 and 250 Hz.",
+                spacecraft_id=session.spacecraft_id,
             )
             return
 
@@ -306,12 +352,18 @@ class TelemetryHub:
                 session,
                 "frequency_rejected",
                 reason="Frequency must be between 1 and 250 Hz.",
+                spacecraft_id=session.spacecraft_id,
             )
             return
 
         session.display_hz = frequency
         session.last_sent_monotonic = 0.0
-        await self._send_status(session, "frequency_updated", frequency_hz=frequency)
+        await self._send_status(
+            session,
+            "frequency_updated",
+            frequency_hz=frequency,
+            spacecraft_id=session.spacecraft_id,
+        )
 
 
 def create_app() -> FastAPI:

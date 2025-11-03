@@ -54,6 +54,25 @@ flowchart LR
     class E muted
 ```
 
+> **Seeing only the Mermaid source?**
+> Some local Markdown viewers (including Visual Studio's default preview) do not render Mermaid diagrams. Open the README on GitHub or in a Mermaid-enabled preview to see the styled graphic. For a quick reference inside any plain Markdown viewer, use the textual outline below.
+
+```
+Producers (PLCs, MCU sensors, simulators)
+        │
+        ▼
+Telemetry Gateway (protocol adapters, rate shaping)
+        │   (future path)                  (current simulation bypass)
+        ├──────────────▶────────────────────────────────────────────┐
+        │                                                          │
+        ▼                                                          │
+Stargate Service (.NET UDP ingest + gRPC fan-out)                  │
+        │                                                          │
+        ├─────────▶ FastAPI Web Dashboard (WebSocket stream)       │
+        ▼                                                          │
+Telemetry CLI (gRPC stream) ◀──────────────────────────────────────┘
+```
+
 ## Repository layout
 
 ```

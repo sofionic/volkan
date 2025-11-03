@@ -9,19 +9,24 @@ namespace Stargate.Broadcast;
 /// </summary>
 public class TelemetryBroadcaster : ITelemetryBroadcaster, IDisposable
 {
+    private const int ChannelCapacity = 256;
+
     private readonly ConcurrentDictionary<Guid, Channel<TelemetryPayload>> _subscribers = new();
 
     /// <summary>
-    /// Create a new subscription backed by an unbounded channel with single-reader semantics.
+    /// Create a new subscription backed by a bounded channel with single-reader semantics.
     /// </summary>
     public TelemetrySubscription Subscribe()
     {
-        // Use a single-reader channel so each subscription has its own independent stream.
-        var channel = Channel.CreateUnbounded<TelemetryPayload>(new UnboundedChannelOptions
+        // Use a bounded single-reader channel so stalled clients cannot grow without bound.
+        var options = new BoundedChannelOptions(ChannelCapacity)
         {
             SingleReader = true,
-            SingleWriter = false
-        });
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.DropOldest
+        };
+
+        var channel = Channel.CreateBounded<TelemetryPayload>(options);
 
         var id = Guid.NewGuid();
         if (!_subscribers.TryAdd(id, channel))

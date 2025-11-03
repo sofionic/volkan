@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -67,6 +68,14 @@ public sealed class UdpTelemetryListener : BackgroundService
                     continue;
                 }
 
+                if (!HasAllSubsystems(payload, out var missing))
+                {
+                    _logger.LogWarning(
+                        "Skipping telemetry sample missing subsystems {MissingSubsystems}",
+                        string.Join(", ", missing));
+                    continue;
+                }
+
                 await _broadcaster.PublishAsync(payload, stoppingToken);
             }
             catch (OperationCanceledException)
@@ -82,5 +91,55 @@ public sealed class UdpTelemetryListener : BackgroundService
         }
 
         _logger.LogInformation("UDP telemetry listener stopped.");
+    }
+
+    /// <summary>
+    /// Ensure that every expected subsystem payload is present before broadcasting.
+    /// </summary>
+    private static bool HasAllSubsystems(TelemetryPayload payload, out List<string> missing)
+    {
+        missing = new List<string>(capacity: 8);
+
+        if (payload.LifeSupport is null)
+        {
+            missing.Add("life_support");
+        }
+
+        if (payload.Crew is null)
+        {
+            missing.Add("crew");
+        }
+
+        if (payload.Navigation is null)
+        {
+            missing.Add("navigation");
+        }
+
+        if (payload.Power is null)
+        {
+            missing.Add("power");
+        }
+
+        if (payload.Thermal is null)
+        {
+            missing.Add("thermal");
+        }
+
+        if (payload.Propulsion is null)
+        {
+            missing.Add("propulsion");
+        }
+
+        if (payload.Communications is null)
+        {
+            missing.Add("communications");
+        }
+
+        if (payload.Structural is null)
+        {
+            missing.Add("structural");
+        }
+
+        return missing.Count == 0;
     }
 }

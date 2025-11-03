@@ -79,74 +79,83 @@ public sealed class TelemetryStreamService : TelemetryService.TelemetryServiceBa
     /// </summary>
     private static Telemetry MapTelemetry(TelemetryPayload payload)
     {
+        var lifeSupport = payload.LifeSupport ?? LifeSupportMetrics.Empty;
+        var crew = payload.Crew ?? CrewMetrics.Empty;
+        var navigation = payload.Navigation ?? NavigationMetrics.Empty;
+        var power = payload.Power ?? PowerMetrics.Empty;
+        var thermal = payload.Thermal ?? ThermalMetrics.Empty;
+        var propulsion = payload.Propulsion ?? PropulsionMetrics.Empty;
+        var communications = payload.Communications ?? CommunicationMetrics.Empty;
+        var structural = payload.Structural ?? StructuralMetrics.Empty;
+
         return new Telemetry
         {
             SpacecraftId = payload.SpacecraftId,
             TimestampMs = payload.TimestampMs,
             LifeSupport = new LifeSupport
             {
-                CabinPressureKpa = payload.LifeSupport.CabinPressureKpa,
-                CabinTemperatureC = payload.LifeSupport.CabinTemperatureC,
-                OxygenPercent = payload.LifeSupport.OxygenPercent,
-                Co2Ppm = payload.LifeSupport.Co2Ppm,
-                HumidityPercent = payload.LifeSupport.HumidityPercent,
-                AirflowMps = payload.LifeSupport.AirflowMps,
-                WaterSupplyLiters = payload.LifeSupport.WaterSupplyLiters,
-                FoodSupplyDays = payload.LifeSupport.FoodSupplyDays
+                CabinPressureKpa = lifeSupport.CabinPressureKpa,
+                CabinTemperatureC = lifeSupport.CabinTemperatureC,
+                OxygenPercent = lifeSupport.OxygenPercent,
+                Co2Ppm = lifeSupport.Co2Ppm,
+                HumidityPercent = lifeSupport.HumidityPercent,
+                AirflowMps = lifeSupport.AirflowMps,
+                WaterSupplyLiters = lifeSupport.WaterSupplyLiters,
+                FoodSupplyDays = lifeSupport.FoodSupplyDays
             },
             Crew = new Crew
             {
-                HeartRateBpm = payload.Crew.HeartRateBpm,
-                BloodPressureSystolic = payload.Crew.BloodPressureSystolic,
-                BloodPressureDiastolic = payload.Crew.BloodPressureDiastolic,
-                BodyTemperatureC = payload.Crew.BodyTemperatureC,
-                ActivityLevel = payload.Crew.ActivityLevel,
-                CommStatus = payload.Crew.CommunicationStatus
+                HeartRateBpm = crew.HeartRateBpm,
+                BloodPressureSystolic = crew.BloodPressureSystolic,
+                BloodPressureDiastolic = crew.BloodPressureDiastolic,
+                BodyTemperatureC = crew.BodyTemperatureC,
+                ActivityLevel = crew.ActivityLevel,
+                CommStatus = crew.CommunicationStatus
             },
             Navigation = new Navigation
             {
-                VelocityKps = payload.Navigation.VelocityKps,
-                AltitudeKm = payload.Navigation.AltitudeKm,
-                LatitudeDeg = payload.Navigation.LatitudeDeg,
-                LongitudeDeg = payload.Navigation.LongitudeDeg,
-                RollDeg = payload.Navigation.RollDeg,
-                PitchDeg = payload.Navigation.PitchDeg,
-                YawDeg = payload.Navigation.YawDeg,
-                ApoapsisKm = payload.Navigation.ApoapsisKm,
-                PeriapsisKm = payload.Navigation.PeriapsisKm
+                VelocityKps = navigation.VelocityKps,
+                AltitudeKm = navigation.AltitudeKm,
+                LatitudeDeg = navigation.LatitudeDeg,
+                LongitudeDeg = navigation.LongitudeDeg,
+                RollDeg = navigation.RollDeg,
+                PitchDeg = navigation.PitchDeg,
+                YawDeg = navigation.YawDeg,
+                ApoapsisKm = navigation.ApoapsisKm,
+                PeriapsisKm = navigation.PeriapsisKm
             },
             Power = new Power
             {
-                BatteryChargePercent = payload.Power.BatteryChargePercent,
-                SolarOutputKw = payload.Power.SolarOutputKw,
-                LoadCurrentAmp = payload.Power.LoadCurrentAmp
+                BatteryChargePercent = power.BatteryChargePercent,
+                SolarOutputKw = power.SolarOutputKw,
+                LoadCurrentAmp = power.LoadCurrentAmp
             },
             Thermal = new Thermal
             {
-                HullTempC = payload.Thermal.HullTemperatureC,
-                RadiatorTempC = payload.Thermal.RadiatorTemperatureC,
-                HeaterStatus = payload.Thermal.HeaterStatus,
-                CoolantLoopPressureKpa = payload.Thermal.CoolantLoopPressureKpa
+                HullTempC = thermal.HullTemperatureC,
+                RadiatorTempC = thermal.RadiatorTemperatureC,
+                HeaterStatus = thermal.HeaterStatus,
+                CoolantLoopPressureKpa = thermal.CoolantLoopPressureKpa
             },
             Propulsion = new Propulsion
             {
-                MainEngineStatus = payload.Propulsion.MainEngineStatus,
-                FuelLevelPercent = payload.Propulsion.FuelLevelPercent,
-                RcsFuelPercent = payload.Propulsion.RcsFuelPercent,
-                AccelerationMps2 = payload.Propulsion.AccelerationMps2
+                MainEngineStatus = propulsion.MainEngineStatus,
+                FuelLevelPercent = propulsion.FuelLevelPercent,
+                RcsFuelPercent = propulsion.RcsFuelPercent,
+                AccelerationMps2 = propulsion.AccelerationMps2
             },
             Communications = new Communications
             {
-                SignalStrengthDb = payload.Communications.SignalStrengthDb,
-                DownlinkRateMbps = payload.Communications.DownlinkRateMbps,
-                UplinkRateMbps = payload.Communications.UplinkRateMbps,
-                ActiveRelay = payload.Communications.ActiveRelay
+                SignalStrengthDb = communications.SignalStrengthDb,
+                DownlinkRateMbps = communications.DownlinkRateMbps,
+                UplinkRateMbps = communications.UplinkRateMbps,
+                ActiveRelay = communications.ActiveRelay
             },
             Structural = new Structural
             {
-                VibrationMms = payload.Structural.VibrationMms,
-                HullStressMpa = payload.Structural.HullStressMpa,
-                WarningStatus = payload.Structural.WarningStatus
+                VibrationMms = structural.VibrationMms,
+                HullStressMpa = structural.HullStressMpa,
+                WarningStatus = structural.WarningStatus
             }
         };
     }

@@ -18,6 +18,42 @@ TEC's Stargate initiative connects spacecraft telemetry sources with the teams t
 
 The staged approach keeps Stargate focused on validation, buffering, and gRPC fan-out while leaving room for realistic heterogeneous sensor networks in later iterations.
 
+### System overview diagram
+
+The following high-level diagram mirrors the four-element narrative and highlights how data flows from field devices through the planned gateway into Stargate and the available client experiences:
+
+```mermaid
+flowchart LR
+    subgraph Producers
+        A[Heterogeneous field devices\n(Beckhoff PLCs, MCU sensors, simulators)]
+    end
+    subgraph Gateway
+        B[Telemetry Gateway\n(protocol adapters, rate shaping, normalisation)]
+    end
+    subgraph Core[Core services]
+        C[Stargate Service\n(.NET gRPC + UDP ingest)]
+    end
+    subgraph Clients
+        D[FastAPI Web Dashboard\n(WebSocket streaming)]
+        E[Telemetry CLI\n(gRPC streaming)]
+    end
+
+    A -- future adapters --> B
+    B -- UDP JSON 250 Hz --> C
+    A -. current simulation .-> C
+    C -- gRPC stream --> D
+    C -- gRPC stream --> E
+
+    classDef accent fill:#0f172a,stroke:#4f46e5,stroke-width:1.5,color:#f8fafc;
+    classDef muted fill:#e0f2fe,stroke:#0369a1,stroke-width:1,color:#0f172a;
+
+    class A accent
+    class B muted
+    class C accent
+    class D muted
+    class E muted
+```
+
 ## Repository layout
 
 ```

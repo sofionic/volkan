@@ -102,8 +102,7 @@ class TelemetryHub:
         if self._task:
             return
 
-        self._channel = grpc.aio.insecure_channel(f"{self._host}:{self._port}")
-        self._stub = TelemetryServiceStub(self._channel)
+        self._ensure_channel()
         self._task = asyncio.create_task(self._consume())
 
     async def stop(self) -> None:
@@ -120,6 +119,7 @@ class TelemetryHub:
         if self._channel:
             await self._channel.close()
             self._channel = None
+            self._stub = None
 
     async def register(self, websocket: WebSocket) -> ClientSession:
         """Accept a WebSocket client and register it for broadcasts."""
@@ -179,16 +179,47 @@ class TelemetryHub:
     async def _consume(self) -> None:
         """Background task that consumes the gRPC stream and broadcasts data."""
 
-        assert self._stub is not None
-        request = StreamRequest(spacecraft_id="")
-
+        backoff_seconds = 1.0
         try:
-            # A single shared stream feeds all WebSocket clients to minimise Stargate load.
-            async for message in self._stub.StreamTelemetry(request):
-                payload = MessageToDict(message, preserving_proto_field_name=True)
-                await self._broadcast(payload)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            LOGGER.exception("Telemetry stream aborted: %%s", exc)
+            while True:
+                try:
+                    self._ensure_channel()
+                    assert self._stub is not None
+                    request = StreamRequest(spacecraft_id="")
+
+                    # A single shared stream feeds all WebSocket clients to minimise Stargate load.
+                    async for message in self._stub.StreamTelemetry(request):
+                        payload = MessageToDict(
+                            message,
+                            preserving_proto_field_name=True,
+                        )
+                        await self._broadcast(payload)
+
+                    backoff_seconds = 1.0
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    LOGGER.exception("Telemetry stream aborted: %s", exc)
+                    await self._reset_channel()
+                    await asyncio.sleep(min(backoff_seconds, 30.0))
+                    backoff_seconds = min(backoff_seconds * 2.0, 30.0)
+        finally:
+            self._task = None
+
+    def _ensure_channel(self) -> None:
+        """Create a gRPC channel if one is not already available."""
+
+        if self._channel is None or self._stub is None:
+            self._channel = grpc.aio.insecure_channel(f"{self._host}:{self._port}")
+            self._stub = TelemetryServiceStub(self._channel)
+
+    async def _reset_channel(self) -> None:
+        """Dispose of the current gRPC channel so it can be recreated."""
+
+        if self._channel is not None:
+            await self._channel.close()
+        self._channel = None
+        self._stub = None
 
     async def _broadcast(self, payload: Dict) -> None:
         """Send a telemetry payload to all active clients respecting filters."""

@@ -33,11 +33,30 @@
           </div>
         </fieldset>
 
+        <div class="control-group frequency-group">
+          <label for="display-frequency">Display Frequency (Hz)</label>
+          <div class="frequency-row">
+            <input
+              id="display-frequency"
+              type="number"
+              min="1"
+              max="250"
+              step="1"
+              value="5"
+              inputmode="numeric"
+              pattern="[0-9]*"
+            />
+            <button id="apply-frequency" type="button">Apply</button>
+          </div>
+          <p id="frequency-status" class="frequency-indicator" data-state="info">Display frequency: 5 Hz</p>
+        </div>
+
         <div class="buttons">
           <button id="start">Start</button>
           <button id="stop">Stop</button>
           <button id="quit" class="secondary">Quit</button>
         </div>
+        <p id="status" class="status-indicator">Disconnected</p>
       </section>
 
       <div class="data-column">

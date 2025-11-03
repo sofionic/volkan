@@ -5,6 +5,10 @@ const capsuleStatus = document.getElementById('capsule-status');
 const telemetryTable = document.getElementById('telemetry-table');
 const spacecraftField = document.getElementById('spacecraft');
 const channelCheckboxes = Array.from(document.querySelectorAll('.channels input[type="checkbox"]'));
+const statusIndicator = document.getElementById('status');
+const frequencyField = document.getElementById('display-frequency');
+const applyFrequencyButton = document.getElementById('apply-frequency');
+const frequencyIndicator = document.getElementById('frequency-status');
 
 const startButton = document.getElementById('start');
 const stopButton = document.getElementById('stop');
@@ -14,6 +18,8 @@ let socket;
 let activeChannels = new Set(channelCheckboxes.filter((input) => input.checked).map((input) => input.value));
 let shouldReconnect = true;
 let pendingStart = false;
+let streaming = false;
+let currentFrequency = frequencyField ? Number.parseInt(frequencyField.value, 10) || 5 : 5;
 
 const channelTitles = {
   life_support: 'Life Support',
@@ -118,7 +124,9 @@ function ensureSocket() {
   socket = new WebSocket(websocketUrl);
 
   socket.addEventListener('open', () => {
+    updateStatus('connected');
     sendConfiguration();
+    sendFrequencyUpdate();
     if (pendingStart) {
       sendCommand('start');
       pendingStart = false;
@@ -127,14 +135,24 @@ function ensureSocket() {
 
   socket.addEventListener('message', (event) => {
     const payload = JSON.parse(event.data);
+    if (payload.type === 'status') {
+      handleStatus(payload);
+      return;
+    }
     renderOverview(payload);
     renderDetails(payload);
   });
 
   socket.addEventListener('close', () => {
+    streaming = false;
+    updateStatus(shouldReconnect ? 'reconnecting' : 'disconnected');
     if (shouldReconnect) {
       setTimeout(ensureSocket, 1000);
     }
+  });
+
+  socket.addEventListener('error', () => {
+    updateStatus('error');
   });
 }
 
@@ -158,6 +176,59 @@ function sendCommand(action) {
   }
 
   socket.send(JSON.stringify({ action }));
+}
+
+function handleStatus(message) {
+  const { state } = message;
+
+  if (state === 'frequency_rejected') {
+    if (frequencyField) {
+      frequencyField.value = String(currentFrequency);
+    }
+    updateFrequencyIndicator(message.reason || 'Frequency rejected', 'error');
+    return;
+  }
+
+  if (typeof message.frequency_hz === 'number' && !Number.isNaN(message.frequency_hz)) {
+    currentFrequency = message.frequency_hz;
+    if (frequencyField) {
+      frequencyField.value = String(currentFrequency);
+    }
+    updateFrequencyIndicator(`Display frequency: ${currentFrequency} Hz`, 'info');
+  }
+
+  if (state === 'frequency_updated') {
+    return;
+  }
+
+  switch (state) {
+    case 'started':
+      streaming = true;
+      updateStatus('streaming');
+      break;
+    case 'stopped':
+      streaming = false;
+      updateStatus('stopped');
+      break;
+    case 'quitting':
+      streaming = false;
+      updateStatus('disconnected');
+      shouldReconnect = false;
+      if (socket) {
+        socket.close();
+        socket = undefined;
+      }
+      break;
+    case 'configured':
+    case 'connected':
+      updateStatus('connected');
+      break;
+    default:
+      if (state) {
+        updateStatus(state);
+      }
+      break;
+  }
 }
 
 function formatKey(key) {
@@ -310,6 +381,52 @@ function renderDetails(payload) {
     });
 }
 
+function sendFrequencyUpdate() {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  socket.send(
+    JSON.stringify({
+      action: 'setFrequency',
+      frequencyHz: currentFrequency,
+    })
+  );
+}
+
+function applyFrequency() {
+  if (!frequencyField) {
+    return;
+  }
+
+  const rawValue = frequencyField.value.trim();
+  if (!/^[0-9]+$/.test(rawValue)) {
+    updateFrequencyIndicator('Enter a whole number between 1 and 250.', 'error');
+    frequencyField.value = String(currentFrequency);
+    return;
+  }
+
+  const requested = Number.parseInt(rawValue, 10);
+  if (Number.isNaN(requested) || requested < 1 || requested > 250) {
+    updateFrequencyIndicator('Enter a value between 1 and 250 Hz.', 'error');
+    frequencyField.value = String(currentFrequency);
+    return;
+  }
+
+  currentFrequency = requested;
+  updateFrequencyIndicator(`Display frequency: ${currentFrequency} Hz`, 'info');
+  sendFrequencyUpdate();
+}
+
+function updateFrequencyIndicator(text, state = 'info') {
+  if (!frequencyIndicator) {
+    return;
+  }
+
+  frequencyIndicator.textContent = text;
+  frequencyIndicator.dataset.state = state;
+}
+
 channelCheckboxes.forEach((input) => {
   input.addEventListener('change', () => {
     if (input.checked) {
@@ -323,9 +440,23 @@ channelCheckboxes.forEach((input) => {
 
 spacecraftField.addEventListener('change', sendConfiguration);
 
+if (applyFrequencyButton) {
+  applyFrequencyButton.addEventListener('click', applyFrequency);
+}
+
+if (frequencyField) {
+  frequencyField.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      applyFrequency();
+    }
+  });
+}
+
 startButton.addEventListener('click', () => {
   pendingStart = true;
   shouldReconnect = true;
+  updateStatus('starting');
   ensureSocket();
   if (socket && socket.readyState === WebSocket.OPEN) {
     sendCommand('start');
@@ -336,12 +467,14 @@ startButton.addEventListener('click', () => {
 stopButton.addEventListener('click', () => {
   pendingStart = false;
   sendCommand('stop');
+  updateStatus('stopping');
 });
 
 quitButton.addEventListener('click', () => {
   pendingStart = false;
   sendCommand('quit');
   shouldReconnect = false;
+  updateStatus('disconnected');
   if (socket) {
     socket.close();
     socket = undefined;
@@ -350,4 +483,64 @@ quitButton.addEventListener('click', () => {
   telemetryTable.innerHTML = '';
 });
 
+function updateStatus(state) {
+  if (!statusIndicator) {
+    return;
+  }
+
+  statusIndicator.dataset.state = state;
+  switch (state) {
+    case 'streaming':
+      statusIndicator.textContent = 'Streaming';
+      startButton.disabled = true;
+      stopButton.disabled = false;
+      quitButton.disabled = false;
+      break;
+    case 'starting':
+      statusIndicator.textContent = 'Starting…';
+      startButton.disabled = true;
+      stopButton.disabled = true;
+      quitButton.disabled = false;
+      break;
+    case 'stopping':
+      statusIndicator.textContent = 'Stopping…';
+      startButton.disabled = true;
+      stopButton.disabled = true;
+      quitButton.disabled = false;
+      break;
+    case 'stopped':
+      statusIndicator.textContent = 'Stopped';
+      startButton.disabled = false;
+      stopButton.disabled = true;
+      quitButton.disabled = false;
+      break;
+    case 'connected':
+      statusIndicator.textContent = streaming ? 'Streaming' : 'Connected';
+      startButton.disabled = streaming;
+      stopButton.disabled = !streaming;
+      quitButton.disabled = false;
+      break;
+    case 'reconnecting':
+      statusIndicator.textContent = 'Reconnecting…';
+      startButton.disabled = true;
+      stopButton.disabled = true;
+      quitButton.disabled = true;
+      break;
+    case 'error':
+      statusIndicator.textContent = 'Connection error';
+      startButton.disabled = false;
+      stopButton.disabled = true;
+      quitButton.disabled = false;
+      break;
+    default:
+      statusIndicator.textContent = 'Disconnected';
+      startButton.disabled = false;
+      stopButton.disabled = true;
+      quitButton.disabled = false;
+      break;
+  }
+}
+
 ensureSocket();
+updateStatus('disconnected');
+updateFrequencyIndicator(`Display frequency: ${currentFrequency} Hz`, 'info');

@@ -131,7 +131,7 @@ The FastAPI server started in step 1 listens on `http://127.0.0.1:8000` by def
 launcher will advance to the next free port and print a message showing the active address. Open the URL in a browser to
 view the dashboard:
 
-* **Controls column** – choose the spacecraft ID, toggle subsystem checkboxes, and issue `Start`, `Stop`, or `Quit` commands.
+* **Controls column** – choose the spacecraft ID, tune the display frequency (1–250 Hz), toggle subsystem checkboxes, and issue `Start`, `Stop`, or `Quit` commands.
 * **Capsule overview** – card-based summary of life support, navigation, power, propulsion, and thermal highlights.
 * **Detailed telemetry** – formatted metrics grouped by subsystem beneath the overview, with human-friendly units for each
   channel.

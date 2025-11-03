@@ -29,7 +29,7 @@ engineering raw sensor IDs.
 
 ## Client interactivity
 
-The console client exposes simple `start`, `stop`, and `quit` commands, keeping scripted diagnostics lightweight. The refreshed FastAPI dashboard mirrors those controls, adds a dedicated `Quit` action, and lays out capsule overview cards above a detailed telemetry column so operators can pivot between summaries and granular metrics without scrolling across multiple panes.
+The console client exposes simple `start`, `stop`, and `quit` commands, keeping scripted diagnostics lightweight. The refreshed FastAPI dashboard mirrors those controls, adds a dedicated `Quit` action, and lays out capsule overview cards above a detailed telemetry column so operators can pivot between summaries and granular metrics without scrolling across multiple panes. A display-frequency control throttles browser updates (1–250 Hz) while Stargate continues ingesting at the full 250 Hz cadence, balancing readability with fidelity.
 
 ## Prototype boundaries
 

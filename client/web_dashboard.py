@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import socket
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -77,6 +78,8 @@ class ClientSession:
     channels: Set[str] = field(default_factory=_default_channels)
     spacecraft_id: str = ""
     active: bool = False
+    display_hz: int = 5
+    last_sent_monotonic: float = 0.0
 
 
 class TelemetryHub:
@@ -126,6 +129,12 @@ class TelemetryHub:
         async with self._lock:
             self._clients.append(session)
         LOGGER.info("Client connected: %s", websocket.client)
+        await self._send_status(
+            session,
+            "connected",
+            channels=sorted(session.channels),
+            frequency_hz=session.display_hz,
+        )
         return session
 
     async def unregister(self, session: ClientSession) -> None:
@@ -147,13 +156,25 @@ class TelemetryHub:
             if isinstance(channels, list):
                 session.channels = {str(item) for item in channels}
             session.spacecraft_id = str(payload.get("spacecraftId", ""))
+            await self._send_status(
+                session,
+                "configured",
+                channels=sorted(session.channels),
+                spacecraft_id=session.spacecraft_id,
+                frequency_hz=session.display_hz,
+            )
         elif action == "start":
             session.active = True
+            await self._send_status(session, "started")
         elif action == "stop":
             session.active = False
+            await self._send_status(session, "stopped")
         elif action == "quit":
             session.active = False
+            await self._send_status(session, "quitting")
             await session.websocket.close(code=1000, reason="Client requested shutdown")
+        elif action == "setFrequency":
+            await self._update_frequency(session, payload.get("frequencyHz"))
 
     async def _consume(self) -> None:
         """Background task that consumes the gRPC stream and broadcasts data."""
@@ -183,6 +204,9 @@ class TelemetryHub:
                 continue
 
             # Restrict the payload to the channels the client cares about before sending.
+            if not self._should_emit(session):
+                continue
+
             filtered = self._filter_payload(payload, session.channels)
             try:
                 await session.websocket.send_text(json.dumps(filtered))
@@ -206,6 +230,57 @@ class TelemetryHub:
             filtered[channel] = value
 
         return filtered
+
+    async def _send_status(self, session: ClientSession, state: str, **details: object) -> None:
+        """Send a structured status update to the specified WebSocket session."""
+
+        message: Dict[str, object] = {"type": "status", "state": state}
+        if details:
+            message.update(details)
+
+        try:
+            await session.websocket.send_text(json.dumps(message))
+        except (RuntimeError, WebSocketDisconnect):
+            LOGGER.debug("Skipping status message for disconnected client")
+
+    def _should_emit(self, session: ClientSession) -> bool:
+        """Return True if the throttled interval for the session has elapsed."""
+
+        if session.display_hz <= 0:
+            return True
+
+        interval = 1.0 / session.display_hz
+        now = time.monotonic()
+        if session.last_sent_monotonic == 0.0 or (now - session.last_sent_monotonic) >= interval:
+            session.last_sent_monotonic = now
+            return True
+
+        return False
+
+    async def _update_frequency(self, session: ClientSession, value: object) -> None:
+        """Validate and apply a requested front-end display frequency."""
+
+        try:
+            frequency = int(str(value))
+        except (TypeError, ValueError):
+            await self._send_status(
+                session,
+                "frequency_rejected",
+                reason="Frequency must be an integer between 1 and 250 Hz.",
+            )
+            return
+
+        if frequency < 1 or frequency > 250:
+            await self._send_status(
+                session,
+                "frequency_rejected",
+                reason="Frequency must be between 1 and 250 Hz.",
+            )
+            return
+
+        session.display_hz = frequency
+        session.last_sent_monotonic = 0.0
+        await self._send_status(session, "frequency_updated", frequency_hz=frequency)
 
 
 def create_app() -> FastAPI:

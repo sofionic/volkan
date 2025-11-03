@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package telemetry;
+
+message StreamRequest {
+  string spacecraft_id = 1;
+}
+
+message LifeSupport {
+  double cabin_pressure_kpa = 1;
+  double cabin_temperature_c = 2;
+  double oxygen_percent = 3;
+  double co2_ppm = 4;
+  double humidity_percent = 5;
+  double airflow_mps = 6;
+  double water_supply_liters = 7;
+  double food_supply_days = 8;
+}
+
+message Crew {
+  double heart_rate_bpm = 1;
+  double blood_pressure_systolic = 2;
+  double blood_pressure_diastolic = 3;
+  double body_temperature_c = 4;
+  string activity_level = 5;
+  string comm_status = 6;
+}
+
+message Navigation {
+  double velocity_kps = 1;
+  double altitude_km = 2;
+  double latitude_deg = 3;
+  double longitude_deg = 4;
+  double roll_deg = 5;
+  double pitch_deg = 6;
+  double yaw_deg = 7;
+  double apoapsis_km = 8;
+  double periapsis_km = 9;
+}
+
+message Power {
+  double battery_charge_percent = 1;
+  double solar_output_kw = 2;
+  double load_current_amp = 3;
+}
+
+message Thermal {
+  double hull_temp_c = 1;
+  double radiator_temp_c = 2;
+  string heater_status = 3;
+  double coolant_loop_pressure_kpa = 4;
+}
+
+message Propulsion {
+  string main_engine_status = 1;
+  double fuel_level_percent = 2;
+  double rcs_fuel_percent = 3;
+  double acceleration_mps2 = 4;
+}
+
+message Communications {
+  double signal_strength_db = 1;
+  double downlink_rate_mbps = 2;
+  double uplink_rate_mbps = 3;
+  string active_relay = 4;
+}
+
+message Structural {
+  double vibration_mms = 1;
+  double hull_stress_mpa = 2;
+  string warning_status = 3;
+}
+
+message Telemetry {
+  string spacecraft_id = 1;
+  int64 timestamp_ms = 2;
+  LifeSupport life_support = 3;
+  Crew crew = 4;
+  Navigation navigation = 5;
+  Power power = 6;
+  Thermal thermal = 7;
+  Propulsion propulsion = 8;
+  Communications communications = 9;
+  Structural structural = 10;
+}
+
+service TelemetryService {
+  rpc StreamTelemetry(StreamRequest) returns (stream Telemetry);
+}

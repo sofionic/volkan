@@ -1,0 +1,393 @@
+"""FastAPI-powered telemetry dashboard for Stargate streams."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import socket
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, List, Optional, Set
+
+import grpc
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from google.protobuf.json_format import MessageToDict
+
+from telemetry_client import ensure_proto_generated
+
+# Generate gRPC bindings before importing the generated modules.
+ensure_proto_generated()
+
+from telemetry_pb2 import StreamRequest  # type: ignore  # noqa: E402
+from telemetry_pb2_grpc import TelemetryServiceStub  # type: ignore  # noqa: E402
+
+
+LOGGER = logging.getLogger("telemetry.web")
+
+
+def _is_port_available(host: str, port: int) -> bool:
+    """Return True if the dashboard can bind to the requested TCP port."""
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((host, port))
+    except OSError:
+        return False
+
+    return True
+
+
+def _select_port(host: str, requested_port: int, attempts: int = 20) -> int:
+    """Pick an available port, scanning successive numbers if needed."""
+
+    port = requested_port
+    for _ in range(attempts):
+        if _is_port_available(host, port):
+            return port
+        port += 1
+
+    raise RuntimeError(
+        f"Unable to find a free port starting at {requested_port} after {attempts} attempts"
+    )
+
+
+def _default_channels() -> Set[str]:
+    """Return the default telemetry channel selection for new sessions."""
+
+    return {
+        "life_support",
+        "navigation",
+        "power",
+        "propulsion",
+        "thermal",
+    }
+
+
+@dataclass(eq=False)
+class ClientSession:
+    """Track a single WebSocket client's subscription preferences."""
+
+    websocket: WebSocket
+    channels: Set[str] = field(default_factory=_default_channels)
+    spacecraft_id: str = ""
+    active: bool = False
+    display_hz: int = 5
+    last_sent_monotonic: float = 0.0
+
+
+class TelemetryHub:
+    """Coordinate a shared gRPC stream and broadcast telemetry to clients."""
+
+    def __init__(self, host: str, port: int):
+        """Store the Stargate endpoint and prepare shared state."""
+
+        self._host = host
+        self._port = port
+        self._channel: Optional[grpc.aio.Channel] = None
+        self._stub: Optional[TelemetryServiceStub] = None
+        self._task: Optional[asyncio.Task[None]] = None
+        self._clients: List[ClientSession] = []
+        self._lock = asyncio.Lock()
+
+    async def start(self) -> None:
+        """Open the gRPC channel and launch the streaming consumer task."""
+
+        if self._task:
+            return
+
+        self._ensure_channel()
+        self._task = asyncio.create_task(self._consume())
+
+    async def stop(self) -> None:
+        """Dispose of the streaming task and close the gRPC channel."""
+
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+
+        if self._channel:
+            await self._channel.close()
+            self._channel = None
+            self._stub = None
+
+    async def register(self, websocket: WebSocket) -> ClientSession:
+        """Accept a WebSocket client and register it for broadcasts."""
+
+        await websocket.accept()
+        session = ClientSession(websocket=websocket)
+        async with self._lock:
+            self._clients.append(session)
+        LOGGER.info("Client connected: %s", websocket.client)
+        await self._send_status(
+            session,
+            "connected",
+            channels=sorted(session.channels),
+            frequency_hz=session.display_hz,
+        )
+        return session
+
+    async def unregister(self, session: ClientSession) -> None:
+        """Remove a WebSocket client and tidy up the session state."""
+
+        async with self._lock:
+            try:
+                self._clients.remove(session)
+            except ValueError:
+                pass
+        LOGGER.info("Client disconnected: %s", session.websocket.client)
+
+    async def handle_message(self, session: ClientSession, payload: Dict) -> None:
+        """Update a client session based on an incoming JSON command."""
+
+        action = payload.get("action")
+        if action == "configure":
+            channels = payload.get("channels")
+            if isinstance(channels, list):
+                session.channels = {str(item) for item in channels}
+            session.spacecraft_id = str(payload.get("spacecraftId", ""))
+            await self._send_status(
+                session,
+                "configured",
+                channels=sorted(session.channels),
+                spacecraft_id=session.spacecraft_id,
+                frequency_hz=session.display_hz,
+            )
+        elif action == "start":
+            session.active = True
+            await self._send_status(session, "started")
+        elif action == "stop":
+            session.active = False
+            await self._send_status(session, "stopped")
+        elif action == "quit":
+            session.active = False
+            await self._send_status(session, "quitting")
+            await session.websocket.close(code=1000, reason="Client requested shutdown")
+        elif action == "setFrequency":
+            await self._update_frequency(session, payload.get("frequencyHz"))
+
+    async def _consume(self) -> None:
+        """Background task that consumes the gRPC stream and broadcasts data."""
+
+        backoff_seconds = 1.0
+        try:
+            while True:
+                try:
+                    self._ensure_channel()
+                    assert self._stub is not None
+                    request = StreamRequest(spacecraft_id="")
+
+                    # A single shared stream feeds all WebSocket clients to minimise Stargate load.
+                    async for message in self._stub.StreamTelemetry(request):
+                        payload = MessageToDict(
+                            message,
+                            preserving_proto_field_name=True,
+                        )
+                        await self._broadcast(payload)
+
+                    backoff_seconds = 1.0
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    LOGGER.exception("Telemetry stream aborted: %s", exc)
+                    await self._reset_channel()
+                    await asyncio.sleep(min(backoff_seconds, 30.0))
+                    backoff_seconds = min(backoff_seconds * 2.0, 30.0)
+        finally:
+            self._task = None
+
+    def _ensure_channel(self) -> None:
+        """Create a gRPC channel if one is not already available."""
+
+        if self._channel is None or self._stub is None:
+            self._channel = grpc.aio.insecure_channel(f"{self._host}:{self._port}")
+            self._stub = TelemetryServiceStub(self._channel)
+
+    async def _reset_channel(self) -> None:
+        """Dispose of the current gRPC channel so it can be recreated."""
+
+        if self._channel is not None:
+            await self._channel.close()
+        self._channel = None
+        self._stub = None
+
+    async def _broadcast(self, payload: Dict) -> None:
+        """Send a telemetry payload to all active clients respecting filters."""
+
+        spacecraft_id = payload.get("spacecraft_id", "")
+        async with self._lock:
+            sessions = list(self._clients)
+
+        for session in sessions:
+            if not session.active:
+                continue
+            if session.spacecraft_id and session.spacecraft_id != spacecraft_id:
+                continue
+
+            # Restrict the payload to the channels the client cares about before sending.
+            if not self._should_emit(session):
+                continue
+
+            filtered = self._filter_payload(payload, session.channels)
+            try:
+                await session.websocket.send_text(json.dumps(filtered))
+            except (RuntimeError, WebSocketDisconnect):
+                continue
+
+    @staticmethod
+    def _filter_payload(payload: Dict, channels: Set[str]) -> Dict:
+        """Return a payload copy limited to the requested telemetry channels."""
+
+        filtered = {
+            "spacecraft_id": payload.get("spacecraft_id"),
+            "timestamp_ms": payload.get("timestamp_ms"),
+        }
+
+        for channel, value in payload.items():
+            if channel in {"spacecraft_id", "timestamp_ms"}:
+                continue
+            if channels and channel not in channels:
+                continue
+            filtered[channel] = value
+
+        return filtered
+
+    async def _send_status(self, session: ClientSession, state: str, **details: object) -> None:
+        """Send a structured status update to the specified WebSocket session."""
+
+        message: Dict[str, object] = {"type": "status", "state": state}
+        if details:
+            message.update(details)
+
+        try:
+            await session.websocket.send_text(json.dumps(message))
+        except (RuntimeError, WebSocketDisconnect):
+            LOGGER.debug("Skipping status message for disconnected client")
+
+    def _should_emit(self, session: ClientSession) -> bool:
+        """Return True if the throttled interval for the session has elapsed."""
+
+        if session.display_hz <= 0:
+            return True
+
+        interval = 1.0 / session.display_hz
+        now = time.monotonic()
+        if session.last_sent_monotonic == 0.0 or (now - session.last_sent_monotonic) >= interval:
+            session.last_sent_monotonic = now
+            return True
+
+        return False
+
+    async def _update_frequency(self, session: ClientSession, value: object) -> None:
+        """Validate and apply a requested front-end display frequency."""
+
+        try:
+            frequency = int(str(value))
+        except (TypeError, ValueError):
+            await self._send_status(
+                session,
+                "frequency_rejected",
+                reason="Frequency must be an integer between 1 and 250 Hz.",
+            )
+            return
+
+        if frequency < 1 or frequency > 250:
+            await self._send_status(
+                session,
+                "frequency_rejected",
+                reason="Frequency must be between 1 and 250 Hz.",
+            )
+            return
+
+        session.display_hz = frequency
+        session.last_sent_monotonic = 0.0
+        await self._send_status(session, "frequency_updated", frequency_hz=frequency)
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application instance."""
+
+    host = os.getenv("STARGATE_HOST", "127.0.0.1")
+    port = int(os.getenv("STARGATE_PORT", "5000"))
+    hub = TelemetryHub(host, port)
+
+    app = FastAPI(title="Stargate Telemetry Dashboard")
+
+    templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+    static_dir = Path(__file__).parent / "static"
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    @app.on_event("startup")
+    async def startup() -> None:  # pragma: no cover - FastAPI lifecycle
+        """Start the shared telemetry stream when the server boots."""
+
+        await hub.start()
+
+    @app.on_event("shutdown")
+    async def shutdown() -> None:  # pragma: no cover - FastAPI lifecycle
+        """Close the gRPC channel cleanly when the server stops."""
+
+        await hub.stop()
+
+    @app.get("/", response_class=HTMLResponse)
+    async def index(request: Request) -> HTMLResponse:
+        """Render the dashboard landing page."""
+
+        return templates.TemplateResponse("dashboard.html", {"request": request})
+
+    @app.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket) -> None:
+        """Handle WebSocket connections from dashboard clients."""
+
+        session = await hub.register(websocket)
+        try:
+            while True:
+                data = await websocket.receive_json()
+                await hub.handle_message(session, data)
+        except WebSocketDisconnect:
+            await hub.unregister(session)
+
+    return app
+
+
+app = create_app()
+
+
+def main() -> None:
+    """Run a development Uvicorn server for the dashboard."""
+
+    import uvicorn
+
+    host = os.getenv("DASHBOARD_HOST", "127.0.0.1")
+    requested_port = int(os.getenv("DASHBOARD_PORT", "8000"))
+
+    port = _select_port(host, requested_port)
+
+    if port != requested_port:
+        print(
+            "Dashboard port {requested} is already in use. Starting on {actual} instead.".format(
+                requested=requested_port,
+                actual=port,
+            )
+        )
+
+    uvicorn.run(
+        "web_dashboard:app",
+        host=host,
+        port=port,
+        reload=False,
+    )
+
+
+if __name__ == "__main__":
+    main()

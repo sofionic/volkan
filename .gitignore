@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+client/telemetry_pb2.py
+client/telemetry_pb2_grpc.py
+
+# .NET build artifacts
+bin/
+obj/
+.vs/

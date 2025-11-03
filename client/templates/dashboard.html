@@ -73,9 +73,15 @@
     </main>
 
     <template id="status-card-template">
-      <div class="card">
-        <h3 class="card-title"></h3>
+      <div class="card status-card status-nominal">
+        <div class="card-header">
+          <h3 class="card-title"></h3>
+          <span class="severity-pill" data-severity="nominal">Nominal</span>
+        </div>
         <p class="card-body"></p>
+        <div class="card-trend">
+          <span class="trend-label" data-trend="steady">Trend —</span>
+        </div>
       </div>
     </template>
 

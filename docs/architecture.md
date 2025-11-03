@@ -53,3 +53,5 @@ microcontroller data into the shared envelopes without the service needing to
 understand individual sensor identifiers.
 
 The telemetry front-ends share the same gRPC contract. The CLI offers a lightweight, scriptable console for operators, while the web dashboard runs a FastAPI bridge that relays gRPC telemetry to browsers over WebSockets for richer visualisation and channel filtering. Operators can throttle the on-screen update cadence between 1 Hz and 250 Hz without affecting the underlying 250 Hz ingest, keeping the display legible while Stargate continues to process the full stream. Users can toggle the streaming session on/off to demonstrate backpressure handling and resource cleanup. When operators submit navigation or Captain's Log notes, the client relays them to Stargate so the service can take responsibility for storage once that capability is implemented.
+
+Subsystem cards display severity badges derived from channel thresholds, trend arrows to highlight rising/falling metrics, and the web hub emits an emoji-enriched snapshot log every minute so operations teams have a lightweight audit trail even without exporting raw telemetry dumps.

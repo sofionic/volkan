@@ -43,6 +43,66 @@ const channelOrder = [
   'structural',
 ];
 
+const severityScale = ['nominal', 'warning', 'critical'];
+const severityLabels = {
+  nominal: 'Nominal',
+  warning: 'Warning',
+  critical: 'Critical',
+};
+
+const channelThresholds = {
+  life_support: {
+    cabin_pressure_kpa: { nominal: [98, 102], warning: [96, 104] },
+    oxygen_percent: { nominal: [19.5, 22.5], warning: [18.5, 23.5] },
+    co2_ppm: { nominal: [350, 1000], warning: [300, 1200] },
+    humidity_percent: { nominal: [30, 60], warning: [25, 70] },
+  },
+  crew: {
+    heart_rate_bpm: { nominal: [55, 100], warning: [40, 120] },
+    body_temperature_c: { nominal: [36, 37.5], warning: [35.5, 38] },
+  },
+  navigation: {
+    velocity_kps: { nominal: [7.3, 8.2], warning: [6.5, 8.5] },
+    altitude_km: { nominal: [350, 450], warning: [300, 500] },
+  },
+  power: {
+    battery_charge_percent: { nominal: [40, 100], warning: [25, 100] },
+    solar_output_kw: { nominal: [15, 25], warning: [10, 30] },
+  },
+  thermal: {
+    hull_temp_c: { nominal: [-40, 20], warning: [-60, 40] },
+    radiator_temp_c: { nominal: [-60, 0], warning: [-80, 10] },
+  },
+  propulsion: {
+    fuel_level_percent: { nominal: [35, 100], warning: [20, 100] },
+    acceleration_mps2: { nominal: [-0.2, 0.2], warning: [-0.5, 0.5] },
+  },
+  communications: {
+    signal_strength_db: { nominal: [-110, -65], warning: [-120, -50] },
+    downlink_rate_mbps: { nominal: [10, 120], warning: [5, 150] },
+  },
+  structural: {
+    vibration_mms: { nominal: [0, 2.5], warning: [0, 4] },
+    hull_stress_mpa: { nominal: [150, 260], warning: [120, 300] },
+  },
+};
+
+const primaryMetrics = {
+  life_support: { key: 'cabin_pressure_kpa', trendThreshold: 0.1, decimals: 1 },
+  crew: { key: 'heart_rate_bpm', trendThreshold: 1.5, decimals: 0 },
+  navigation: { key: 'velocity_kps', trendThreshold: 0.02, decimals: 2 },
+  power: { key: 'battery_charge_percent', trendThreshold: 0.5, decimals: 0 },
+  thermal: { key: 'hull_temp_c', trendThreshold: 0.5, decimals: 1 },
+  propulsion: { key: 'fuel_level_percent', trendThreshold: 0.5, decimals: 0 },
+  communications: { key: 'downlink_rate_mbps', trendThreshold: 1.0, decimals: 1 },
+  structural: { key: 'hull_stress_mpa', trendThreshold: 1.0, decimals: 0 },
+};
+
+const channelHistory = new Map(
+  Object.keys(channelTitles).map((channel) => [channel, []])
+);
+const HISTORY_LIMIT = 120;
+
 const detailFormatters = {
   life_support: (value) => [
     { label: 'Cabin Pressure', value: formatNumeric(value.cabin_pressure_kpa, 1, 'kPa') },
@@ -135,12 +195,12 @@ function ensureSocket() {
 
   socket.addEventListener('message', (event) => {
     const payload = JSON.parse(event.data);
-  if (payload.type === 'status') {
-    handleStatus(payload);
-    return;
-  }
-  renderOverview(payload);
-  renderDetails(payload);
+    if (payload.type === 'status') {
+      handleStatus(payload);
+      return;
+    }
+    renderOverview(payload);
+    renderDetails(payload);
   });
 
   socket.addEventListener('close', () => {
@@ -287,8 +347,27 @@ function renderOverview(payload) {
     }
 
     const clone = statusTemplate.content.cloneNode(true);
-    clone.querySelector('.card-title').textContent = channelTitles[key] || formatKey(key);
-    clone.querySelector('.card-body').textContent = formatter(payload[key]);
+    const card = clone.querySelector('.status-card');
+    const title = card.querySelector('.card-title');
+    const severityPill = card.querySelector('.severity-pill');
+    const trendLabel = card.querySelector('.trend-label');
+
+    title.textContent = channelTitles[key] || formatKey(key);
+    card.querySelector('.card-body').textContent = formatter(payload[key]);
+
+    const severity = determineSeverity(key, payload[key]);
+    applySeverity(card, severity);
+    if (severityPill) {
+      severityPill.dataset.severity = severity;
+      severityPill.textContent = severityLabels[severity] || severityLabels.nominal;
+    }
+
+    const trend = updateTrend(key, payload[key]);
+    if (trendLabel) {
+      trendLabel.dataset.trend = trend.state;
+      trendLabel.textContent = trend.label;
+    }
+
     capsuleStatus.appendChild(clone);
   });
 }
@@ -343,46 +422,156 @@ function renderDetails(payload) {
   ];
 
   orderedEntries.forEach(([key, value]) => {
-      if (!value || typeof value !== 'object') {
-        return;
-      }
+    if (!value || typeof value !== 'object') {
+      return;
+    }
 
-      const card = document.createElement('div');
-      card.className = 'detail-card';
-      const title = document.createElement('h3');
-      title.textContent = channelTitles[key] || formatKey(key);
-      card.appendChild(title);
+    recordHistory(key, value);
 
-      const metrics = document.createElement('div');
-      metrics.className = 'detail-metrics';
+    const card = document.createElement('div');
+    card.className = 'detail-card';
+    const title = document.createElement('h3');
+    title.textContent = channelTitles[key] || formatKey(key);
 
-      const rows = detailFormatters[key]
-        ? detailFormatters[key](value)
-        : Object.entries(value).map(([metricKey, metricValue]) => ({
-            label: formatKey(metricKey),
-            value:
-              typeof metricValue === 'number'
-                ? metricValue.toFixed(2)
-                : String(metricValue),
-          }));
+    const severity = determineSeverity(key, value);
+    applySeverity(card, severity);
 
-      rows.forEach((entry) => {
-        const metric = document.createElement('div');
-        metric.className = 'metric';
-        const label = document.createElement('span');
-        label.className = 'metric-label';
-        label.textContent = entry.label;
-        const value = document.createElement('span');
-        value.className = 'metric-value';
-        value.textContent = entry.value;
-        metric.appendChild(label);
-        metric.appendChild(value);
-        metrics.appendChild(metric);
-      });
+    const severityBadge = document.createElement('span');
+    severityBadge.className = `severity-badge severity-${severity}`;
+    severityBadge.textContent = severityLabels[severity] || severityLabels.nominal;
+    title.appendChild(severityBadge);
+    card.appendChild(title);
 
-      card.appendChild(metrics);
-      telemetryTable.appendChild(card);
+    const metrics = document.createElement('div');
+    metrics.className = 'detail-metrics';
+
+    const rows = detailFormatters[key]
+      ? detailFormatters[key](value)
+      : Object.entries(value).map(([metricKey, metricValue]) => ({
+          label: formatKey(metricKey),
+          value:
+            typeof metricValue === 'number'
+              ? metricValue.toFixed(2)
+              : String(metricValue),
+        }));
+
+    rows.forEach((entry) => {
+      const metric = document.createElement('div');
+      metric.className = 'metric';
+      const label = document.createElement('span');
+      label.className = 'metric-label';
+      label.textContent = entry.label;
+      const valueElement = document.createElement('span');
+      valueElement.className = 'metric-value';
+      valueElement.textContent = entry.value;
+      metric.appendChild(label);
+      metric.appendChild(valueElement);
+      metrics.appendChild(metric);
     });
+
+    card.appendChild(metrics);
+    telemetryTable.appendChild(card);
+  });
+}
+
+function recordHistory(channel, value) {
+  const definition = primaryMetrics[channel];
+  if (!definition || !value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const metric = value[definition.key];
+  if (typeof metric !== 'number' || Number.isNaN(metric)) {
+    return undefined;
+  }
+
+  const history = channelHistory.get(channel) || [];
+  history.push(metric);
+  while (history.length > HISTORY_LIMIT) {
+    history.shift();
+  }
+  channelHistory.set(channel, history);
+  return history;
+}
+
+function determineSeverity(channel, value) {
+  const thresholds = channelThresholds[channel];
+  if (!thresholds || !value || typeof value !== 'object') {
+    return 'nominal';
+  }
+
+  let worstIndex = 0;
+  Object.entries(thresholds).forEach(([metricKey, ranges]) => {
+    const index = evaluateMetric(value[metricKey], ranges);
+    worstIndex = Math.max(worstIndex, index);
+  });
+
+  return severityScale[worstIndex] || 'nominal';
+}
+
+function evaluateMetric(rawValue, ranges) {
+  if (!ranges) {
+    return 0;
+  }
+
+  if (typeof rawValue !== 'number' || Number.isNaN(rawValue)) {
+    return 1;
+  }
+
+  const [nominalMin, nominalMax] = ranges.nominal;
+  const [warningMin, warningMax] = ranges.warning;
+
+  if (rawValue < warningMin || rawValue > warningMax) {
+    return 2;
+  }
+
+  if (rawValue < nominalMin || rawValue > nominalMax) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function applySeverity(element, severity) {
+  severityScale.forEach((state) => element.classList.remove(`status-${state}`));
+  element.classList.add(`status-${severity}`);
+}
+
+function updateTrend(channel, value) {
+  const history = recordHistory(channel, value);
+  if (!history || history.length === 0) {
+    return { state: 'unknown', label: 'Trend —' };
+  }
+
+  const definition = primaryMetrics[channel];
+  const latest = history[history.length - 1];
+
+  if (!definition || history.length < 2) {
+    return {
+      state: 'steady',
+      label:
+        typeof latest === 'number'
+          ? `Trend → ${latest.toFixed(definition?.decimals ?? 1)}`
+          : 'Trend —',
+    };
+  }
+
+  const previous = history[history.length - 2];
+  const delta = latest - previous;
+  const threshold = definition.trendThreshold ?? 0.1;
+  const decimals = definition.decimals ?? 1;
+
+  if (Math.abs(delta) < threshold) {
+    return { state: 'steady', label: `Trend → ${latest.toFixed(decimals)}` };
+  }
+
+  const state = delta > 0 ? 'rising' : 'falling';
+  const arrow = delta > 0 ? '↑' : '↓';
+  const sign = delta > 0 ? '+' : '';
+  return {
+    state,
+    label: `Trend ${arrow} ${sign}${delta.toFixed(decimals)}`,
+  };
 }
 
 function sendFrequencyUpdate() {

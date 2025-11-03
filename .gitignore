@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 client/telemetry_pb2.py
 client/telemetry_pb2_grpc.py
+client/logs/
 
 # .NET build artifacts
 bin/

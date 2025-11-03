@@ -187,9 +187,12 @@ launcher will advance to the next free port and print a message showing the acti
 view the dashboard:
 
 * **Controls column** – choose the spacecraft ID, tune the display frequency (1–250 Hz), toggle subsystem checkboxes, and issue `Start`, `Stop`, or `Quit` commands.
-* **Capsule overview** – card-based summary of life support, navigation, power, propulsion, and thermal highlights.
-* **Detailed telemetry** – formatted metrics grouped by subsystem beneath the overview, with human-friendly units for each
-  channel.
+* **Capsule overview** – colour-coded cards show subsystem health, severity badges, and inline trend arrows for the most
+  important metric in each group.
+* **Detailed telemetry** – formatted metrics grouped by subsystem beneath the overview, with human-friendly units and
+  severity badges so you can spot warning/critical states quickly.
+* **Emoji log snapshots** – every 60 seconds the dashboard captures the freshest payload and appends an emoji-rich summary
+  to `client/logs/telemetry.log` (ignored by Git). Use this rolling file as a lightweight operator audit trail.
 
 To relocate the dashboard server, edit `DASHBOARD_HOST`/`DASHBOARD_PORT` in `appsettings.json` or override those environment
 variables before launching Stargate.

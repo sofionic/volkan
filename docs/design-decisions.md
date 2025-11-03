@@ -31,6 +31,8 @@ engineering raw sensor IDs.
 
 The console client exposes simple `start`, `stop`, and `quit` commands, keeping scripted diagnostics lightweight. The refreshed FastAPI dashboard mirrors those controls, adds a dedicated `Quit` action, and lays out capsule overview cards above a detailed telemetry column so operators can pivot between summaries and granular metrics without scrolling across multiple panes. A display-frequency control throttles browser updates (1–250 Hz) while Stargate continues ingesting at the full 250 Hz cadence, balancing readability with fidelity.
 
+Dashboard cards derive severity from subsystem-specific thresholds so operators can see green/orange/red states instantly, and lightweight trend arrows display the latest delta without introducing a heavy charting library. The web hub also writes a minute-by-minute emoji log (`client/logs/telemetry.log`) that captures the most recent payload snapshot for post-run audits.
+
 ## Prototype boundaries
 
 * **Gateway placeholder** – the telemetry gateway is acknowledged but not implemented; the BLonQ mock exercises the same UDP envelope that the gateway will emit so Stargate logic remains valid when the gateway arrives.

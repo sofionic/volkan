@@ -183,8 +183,65 @@ button:active {
   min-height: 140px;
 }
 
+.status-card.status-nominal,
+.detail-card.status-nominal {
+  border-color: rgba(46, 204, 113, 0.45);
+  box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.15);
+}
+
+.status-card.status-warning,
+.detail-card.status-warning {
+  border-color: rgba(241, 196, 15, 0.5);
+  box-shadow: 0 0 0 1px rgba(241, 196, 15, 0.18);
+}
+
+.status-card.status-critical,
+.detail-card.status-critical {
+  border-color: rgba(231, 76, 60, 0.55);
+  box-shadow: 0 0 0 1px rgba(231, 76, 60, 0.25);
+}
+
+.status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.severity-pill {
+  padding: 0.2rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f7fa;
+}
+
+.severity-pill[data-severity='nominal'] {
+  background: rgba(46, 204, 113, 0.18);
+  color: #2ecc71;
+}
+
+.severity-pill[data-severity='warning'] {
+  background: rgba(241, 196, 15, 0.18);
+  color: #f1c40f;
+}
+
+.severity-pill[data-severity='critical'] {
+  background: rgba(231, 76, 60, 0.18);
+  color: #e74c3c;
+}
+
 .card-title {
-  margin: 0 0 0.5rem;
+  margin: 0;
   text-transform: uppercase;
   font-size: 0.9rem;
   letter-spacing: 0.08em;
@@ -196,6 +253,29 @@ button:active {
   white-space: pre-line;
   font-family: "Fira Code", "Source Code Pro", monospace;
   font-size: 0.95rem;
+}
+
+.card-trend {
+  display: flex;
+  justify-content: flex-end;
+  font-size: 0.8rem;
+  color: rgba(245, 247, 250, 0.7);
+}
+
+.trend-label[data-trend='rising'] {
+  color: #2ecc71;
+}
+
+.trend-label[data-trend='falling'] {
+  color: #e74c3c;
+}
+
+.trend-label[data-trend='steady'] {
+  color: #88c0ff;
+}
+
+.trend-label[data-trend='unknown'] {
+  color: rgba(245, 247, 250, 0.6);
 }
 
 .detail-grid {
@@ -219,6 +299,36 @@ button:active {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #c5e1ff;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.severity-badge {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f7fa;
+  margin-left: auto;
+}
+
+.severity-badge.severity-nominal {
+  background: rgba(46, 204, 113, 0.18);
+  color: #2ecc71;
+}
+
+.severity-badge.severity-warning {
+  background: rgba(241, 196, 15, 0.18);
+  color: #f1c40f;
+}
+
+.severity-badge.severity-critical {
+  background: rgba(231, 76, 60, 0.18);
+  color: #e74c3c;
 }
 
 .detail-metrics {

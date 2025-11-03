@@ -9,8 +9,9 @@ import os
 import socket
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 import grpc
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -96,6 +97,13 @@ class TelemetryHub:
         self._clients: List[ClientSession] = []
         self._latest_payload: Optional[Dict] = None
         self._lock = asyncio.Lock()
+        log_root = os.getenv(
+            "TELEMETRY_LOG_PATH",
+            str(Path(__file__).parent / "logs" / "telemetry.log"),
+        )
+        self._log_path = Path(log_root)
+        self._log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._last_log_monotonic: float = 0.0
 
     async def start(self) -> None:
         """Open the gRPC channel and launch the streaming consumer task."""
@@ -217,6 +225,7 @@ class TelemetryHub:
                                 )
 
                         self._latest_payload = payload
+                        self._maybe_log_snapshot(payload)
                         await self._broadcast(payload)
 
                     backoff_seconds = 1.0
@@ -364,6 +373,243 @@ class TelemetryHub:
             frequency_hz=frequency,
             spacecraft_id=session.spacecraft_id,
         )
+
+    def _maybe_log_snapshot(self, payload: Dict) -> None:
+        """Append a minute-by-minute health snapshot with emoji statuses."""
+
+        now = time.monotonic()
+        if self._last_log_monotonic and (now - self._last_log_monotonic) < 60.0:
+            return
+
+        self._last_log_monotonic = now
+
+        try:
+            line = self._format_log_line(payload)
+        except Exception:  # pragma: no cover - defensive logging
+            LOGGER.exception("Unable to format telemetry snapshot for logging")
+            return
+
+        try:
+            with self._log_path.open("a", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+        except OSError:  # pragma: no cover - defensive logging
+            LOGGER.exception("Unable to write telemetry snapshot to %s", self._log_path)
+
+    def _format_log_line(self, payload: Dict) -> str:
+        """Return an emoji-rich summary string for the current telemetry state."""
+
+        timestamp_ms = payload.get("timestamp_ms")
+        try:
+            if isinstance(timestamp_ms, str):
+                timestamp_ms = int(timestamp_ms)
+            timestamp_iso = datetime.fromtimestamp(
+                float(timestamp_ms) / 1000.0, tz=timezone.utc
+            ).isoformat()
+        except (TypeError, ValueError):
+            timestamp_iso = datetime.now(tz=timezone.utc).isoformat()
+
+        spacecraft = payload.get("spacecraft_id") or "unknown"
+
+        summaries = [f"🚀 {spacecraft}"]
+
+        for channel, formatter in (
+            ("life_support", self._summarise_life_support),
+            ("crew", self._summarise_crew),
+            ("navigation", self._summarise_navigation),
+            ("power", self._summarise_power),
+            ("thermal", self._summarise_thermal),
+            ("propulsion", self._summarise_propulsion),
+            ("communications", self._summarise_communications),
+            ("structural", self._summarise_structural),
+        ):
+            data = payload.get(channel)
+            if isinstance(data, dict):
+                emoji, text = formatter(data)
+                summaries.append(f"{emoji} {text}")
+            else:
+                summaries.append(f"⚪ {self._title_for_channel(channel)} unavailable")
+
+        return f"{timestamp_iso} | " + " | ".join(summaries)
+
+    @staticmethod
+    def _title_for_channel(channel: str) -> str:
+        """Return a human-readable channel title."""
+
+        titles = {
+            "life_support": "Life Support",
+            "crew": "Crew",
+            "navigation": "Navigation",
+            "power": "Power",
+            "thermal": "Thermal",
+            "propulsion": "Propulsion",
+            "communications": "Communications",
+            "structural": "Structural",
+        }
+        return titles.get(channel, channel.replace("_", " ").title())
+
+    def _summarise_life_support(self, data: Dict) -> Tuple[str, str]:
+        """Return status and summary text for life support metrics."""
+
+        items = [
+            ("cabin_pressure_kpa", "Pressure", "kPa", (98.0, 102.0), (96.0, 104.0)),
+            ("oxygen_percent", "O₂", "%", (19.5, 22.5), (18.5, 23.5)),
+            ("co2_ppm", "CO₂", "ppm", (350.0, 1000.0), (300.0, 1200.0)),
+            ("humidity_percent", "Humidity", "%", (30.0, 60.0), (25.0, 70.0)),
+        ]
+        return self._summarise_channel("Life Support", data, items)
+
+    def _summarise_crew(self, data: Dict) -> Tuple[str, str]:
+        """Return status and summary text for crew health metrics."""
+
+        items = [
+            ("heart_rate_bpm", "HR", "bpm", (55.0, 100.0), (40.0, 120.0)),
+            (
+                "body_temperature_c",
+                "Temp",
+                "°C",
+                (36.0, 37.5),
+                (35.5, 38.0),
+            ),
+        ]
+        return self._summarise_channel("Crew", data, items)
+
+    def _summarise_navigation(self, data: Dict) -> Tuple[str, str]:
+        """Return status and summary text for navigation metrics."""
+
+        items = [
+            ("velocity_kps", "Vel", "km/s", (7.3, 8.2), (6.5, 8.5)),
+            ("altitude_km", "Alt", "km", (350.0, 450.0), (300.0, 500.0)),
+        ]
+        return self._summarise_channel("Navigation", data, items)
+
+    def _summarise_power(self, data: Dict) -> Tuple[str, str]:
+        """Return status and summary text for power metrics."""
+
+        items = [
+            (
+                "battery_charge_percent",
+                "Battery",
+                "%",
+                (40.0, 100.0),
+                (25.0, 100.0),
+            ),
+            ("solar_output_kw", "Solar", "kW", (15.0, 25.0), (10.0, 30.0)),
+        ]
+        return self._summarise_channel("Power", data, items)
+
+    def _summarise_thermal(self, data: Dict) -> Tuple[str, str]:
+        """Return status and summary text for thermal metrics."""
+
+        items = [
+            ("hull_temp_c", "Hull", "°C", (-40.0, 20.0), (-60.0, 40.0)),
+            (
+                "radiator_temp_c",
+                "Radiator",
+                "°C",
+                (-60.0, 0.0),
+                (-80.0, 10.0),
+            ),
+        ]
+        return self._summarise_channel("Thermal", data, items)
+
+    def _summarise_propulsion(self, data: Dict) -> Tuple[str, str]:
+        """Return status and summary text for propulsion metrics."""
+
+        items = [
+            (
+                "fuel_level_percent",
+                "Fuel",
+                "%",
+                (35.0, 100.0),
+                (20.0, 100.0),
+            ),
+            ("acceleration_mps2", "Accel", "m/s²", (-0.2, 0.2), (-0.5, 0.5)),
+        ]
+        return self._summarise_channel("Propulsion", data, items)
+
+    def _summarise_communications(self, data: Dict) -> Tuple[str, str]:
+        """Return status and summary text for communications metrics."""
+
+        items = [
+            (
+                "signal_strength_db",
+                "Signal",
+                "dB",
+                (-110.0, -65.0),
+                (-120.0, -50.0),
+            ),
+            (
+                "downlink_rate_mbps",
+                "Down",
+                "Mbps",
+                (10.0, 120.0),
+                (5.0, 150.0),
+            ),
+        ]
+        return self._summarise_channel("Comms", data, items)
+
+    def _summarise_structural(self, data: Dict) -> Tuple[str, str]:
+        """Return status and summary text for structural metrics."""
+
+        items = [
+            ("vibration_mms", "Vibe", "mm/s", (0.0, 2.5), (0.0, 4.0)),
+            ("hull_stress_mpa", "Stress", "MPa", (150.0, 260.0), (120.0, 300.0)),
+        ]
+        return self._summarise_channel("Structural", data, items)
+
+    def _summarise_channel(
+        self,
+        title: str,
+        data: Dict,
+        items: List[Tuple[str, str, str, Tuple[float, float], Tuple[float, float]]],
+    ) -> Tuple[str, str]:
+        """Compute an overall emoji and formatted metric summary for a subsystem."""
+
+        severity = 0
+        parts = []
+        for field, label, unit, nominal_range, warning_range in items:
+            value = data.get(field)
+            status, formatted = self._format_metric(
+                value,
+                label,
+                unit,
+                nominal_range,
+                warning_range,
+            )
+            severity = max(severity, status)
+            parts.append(formatted)
+
+        emoji = {0: "✅", 1: "⚠️", 2: "❌"}.get(severity, "⚪")
+        return emoji, f"{title}: {' / '.join(parts)}"
+
+    @staticmethod
+    def _format_metric(
+        value: object,
+        label: str,
+        unit: str,
+        nominal_range: Tuple[float, float],
+        warning_range: Tuple[float, float],
+    ) -> Tuple[int, str]:
+        """Return severity index and formatted metric string for logging."""
+
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return 1, f"{label} n/a"
+
+        severity = 0
+        nominal_min, nominal_max = nominal_range
+        warning_min, warning_max = warning_range
+
+        if numeric < warning_min or numeric > warning_max:
+            severity = 2
+        elif numeric < nominal_min or numeric > nominal_max:
+            severity = 1
+
+        formatted_value = f"{numeric:.1f}"
+        if unit:
+            formatted_value = f"{formatted_value} {unit}"
+        return severity, f"{label} {formatted_value}"
 
 
 def create_app() -> FastAPI:

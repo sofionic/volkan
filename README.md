@@ -193,6 +193,9 @@ view the dashboard:
   severity badges so you can spot warning/critical states quickly.
 * **Interactive drill-down** – click any overview or detail card to open a modal with live gauges, trend sparkline,
   threshold ranges, and placeholder PID tuning values for that subsystem.
+* **Nyx capsule viewer** – the drill-down overlay now embeds a Three.js scene of the Nyx capsule. Drag with the mouse to
+  rotate, watch propulsion/thermal/communications accents respond to telemetry, and keep the model aligned with the
+  navigation attitude reported by Stargate.
 * **Emoji log snapshots** – every 60 seconds the dashboard captures the freshest payload and appends an emoji-rich summary
   to `client/logs/telemetry.log` (ignored by Git). Use this rolling file as a lightweight operator audit trail.
 

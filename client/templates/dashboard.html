@@ -82,6 +82,10 @@
           <span id="detail-severity" class="detail-severity" data-severity="nominal">Stable</span>
         </header>
         <section class="detail-modal-body">
+          <!-- Interactive Nyx capsule visualization rendered with Three.js. -->
+          <div class="detail-visualization" aria-live="polite">
+            <canvas id="capsule-visualizer" aria-label="Nyx capsule 3D overview"></canvas>
+          </div>
           <div class="detail-gauge" aria-live="polite">
             <div class="gauge-container">
               <div class="gauge-track">
@@ -125,6 +129,8 @@
       </div>
     </template>
 
+    <!-- Three.js powers the interactive Nyx model; loaded before the dashboard runtime. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js" integrity="sha512-sWZ3JE+PE0RduCMsZ/HlaEJJkzA6ECJMvliK74XAiGDNAPJ2DzffI3owWBwB2404zt0QtwXwhsQU4/IDnnUyOw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script type="module" src="/static/dashboard.js"></script>
   </body>
 </html>

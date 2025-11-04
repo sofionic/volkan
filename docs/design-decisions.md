@@ -31,6 +31,8 @@ engineering raw sensor IDs.
 
 The console client exposes simple `start`, `stop`, and `quit` commands, keeping scripted diagnostics lightweight. The refreshed FastAPI dashboard mirrors those controls, adds a dedicated `Quit` action, and lays out capsule overview cards above a detailed telemetry column so operators can pivot between summaries and granular metrics without scrolling across multiple panes. A display-frequency control throttles browser updates (1–250 Hz) while Stargate continues ingesting at the full 250 Hz cadence, balancing readability with fidelity.
 
+Clicking any card opens an interactive modal that now embeds a Three.js representation of the Nyx capsule. Navigation telemetry drives the attitude of the model, while propulsion, thermal, and communications readings tint emissive materials so operators get an immediate spatial cue alongside the numeric trends.
+
 Dashboard cards derive severity from subsystem-specific thresholds so operators can see green/orange/red states instantly, and lightweight trend arrows display the latest delta without introducing a heavy charting library. The web hub also writes a minute-by-minute emoji log (`client/logs/telemetry.log`) that captures the most recent payload snapshot for post-run audits.
 
 ## Prototype boundaries

@@ -37,9 +37,17 @@ const detailTrendCanvas = document.getElementById('detail-trend');
 const detailLimitsList = document.getElementById('detail-limits');
 const detailAlarmList = document.getElementById('detail-alarms');
 const detailPidList = document.getElementById('detail-pid');
+const capsuleCanvas = document.getElementById('capsule-visualizer');
 
 let activeDetailChannel = null;
 let activeDetailPayload = null;
+
+/*
+ * Keeps track of the latest payload for each subsystem so the Nyx model
+ * can blend navigation, propulsion, and thermal cues regardless of which
+ * channel is currently highlighted in the detail overlay.
+ */
+const latestSubsystems = new Map();
 
 const channelTitles = {
   life_support: 'Life Support',
@@ -68,6 +76,34 @@ const severityLabels = {
   nominal: 'Stable',
   warning: 'Warning',
   critical: 'Critical',
+};
+
+const severityPalette = {
+  nominal: 0x2ecc71,
+  warning: 0xf1c40f,
+  critical: 0xe74c3c,
+};
+
+const capsuleRenderState = {
+  renderer: null,
+  scene: null,
+  camera: null,
+  group: null,
+  hullMaterial: null,
+  heatShieldMaterial: null,
+  solarMaterial: null,
+  engineMaterial: null,
+  antennaMaterial: null,
+  baseHullColor: null,
+  baseHeatShieldColor: null,
+  targetRotation: { x: 0, y: 0, z: 0 },
+  autoRotate: 0.002,
+  autoAngle: 0,
+  frameHandle: null,
+  isDragging: false,
+  pointerId: null,
+  lastPointer: { x: 0, y: 0 },
+  interactionsBound: false,
 };
 
 const channelThresholds = {
@@ -460,6 +496,7 @@ function renderDetails(payload) {
       return;
     }
 
+    latestSubsystems.set(key, value);
     recordHistory(key, value);
 
     const card = document.createElement('div');
@@ -544,8 +581,11 @@ function openDetailPanel(channel, value) {
     return;
   }
 
+  ensureCapsuleRenderer();
+  startCapsuleAnimation();
   detailOverlay.dataset.visible = 'true';
   detailOverlay.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => resizeCapsuleRenderer());
   updateDetailPanel(channel, value);
 }
 
@@ -556,6 +596,7 @@ function closeDetailPanel() {
 
   detailOverlay.dataset.visible = 'false';
   detailOverlay.setAttribute('aria-hidden', 'true');
+  stopCapsuleAnimation();
   activeDetailChannel = null;
   activeDetailPayload = null;
 }
@@ -602,6 +643,386 @@ function updateDetailPanel(channel, value) {
   updateAlarmList(severity, metricMeta, metricValue);
   updatePidList(channel);
   renderDetailTrend(channel, severity);
+  updateCapsuleVisualization(channel, value, severity);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Nyx capsule visualization                                                   */
+/* -------------------------------------------------------------------------- */
+
+function updateCapsuleVisualization(channel, value, severity) {
+  if (!capsuleCanvas || !window.THREE) {
+    return;
+  }
+
+  ensureCapsuleRenderer();
+  if (!capsuleRenderState.renderer) {
+    return;
+  }
+
+  applyHullSeverity(severity);
+
+  const navigation =
+    (channel === 'navigation' ? value : latestSubsystems.get('navigation')) || undefined;
+  const power = (channel === 'power' ? value : latestSubsystems.get('power')) || undefined;
+  const thermal =
+    (channel === 'thermal' ? value : latestSubsystems.get('thermal')) || undefined;
+  const propulsion =
+    (channel === 'propulsion' ? value : latestSubsystems.get('propulsion')) || undefined;
+  const communications =
+    (channel === 'communications' ? value : latestSubsystems.get('communications')) || undefined;
+
+  if (navigation) {
+    updateCapsuleOrientationFromNavigation(navigation);
+  }
+
+  updateCapsulePowerAccents(power);
+  updateCapsuleThermalAccents(thermal);
+  updateCapsulePropulsionAccents(propulsion);
+  updateCapsuleCommsAccents(communications);
+}
+
+function ensureCapsuleRenderer() {
+  if (!capsuleCanvas || capsuleRenderState.renderer || !window.THREE) {
+    return;
+  }
+
+  const THREE = window.THREE;
+  const {
+    Scene,
+    PerspectiveCamera,
+    WebGLRenderer,
+    AmbientLight,
+    DirectionalLight,
+    Color,
+    Group,
+    Mesh,
+    CylinderGeometry,
+    ConeGeometry,
+    MeshStandardMaterial,
+    SphereGeometry,
+    BoxGeometry,
+  } = THREE;
+
+  const renderer = new WebGLRenderer({ canvas: capsuleCanvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+
+  const scene = new Scene();
+  scene.background = new Color(0x050b18);
+
+  const camera = new PerspectiveCamera(
+    45,
+    (capsuleCanvas.clientWidth || 360) / (capsuleCanvas.clientHeight || 320),
+    0.1,
+    100
+  );
+  camera.position.set(0, 1.25, 3.6);
+
+  const ambient = new AmbientLight(0xffffff, 0.55);
+  const key = new DirectionalLight(0xffffff, 0.9);
+  key.position.set(4, 6, 6);
+  const rim = new DirectionalLight(0x88c0ff, 0.4);
+  rim.position.set(-3, -2, -4);
+  scene.add(ambient);
+  scene.add(key);
+  scene.add(rim);
+
+  const group = new Group();
+  scene.add(group);
+
+  const hullMaterial = new MeshStandardMaterial({
+    color: 0x4a90e2,
+    metalness: 0.45,
+    roughness: 0.55,
+  });
+  const hull = new Mesh(new CylinderGeometry(0.72, 0.82, 1.6, 48, 1, true), hullMaterial);
+  hull.castShadow = true;
+  hull.receiveShadow = true;
+  group.add(hull);
+
+  const noseMaterial = new MeshStandardMaterial({
+    color: 0xbcd4ff,
+    metalness: 0.35,
+    roughness: 0.4,
+  });
+  const nose = new Mesh(new ConeGeometry(0.72, 0.7, 48), noseMaterial);
+  nose.position.y = 1.15;
+  group.add(nose);
+
+  const heatShieldMaterial = new MeshStandardMaterial({
+    color: 0x1c2837,
+    metalness: 0.75,
+    roughness: 0.45,
+  });
+  const heatShield = new Mesh(new CylinderGeometry(0.85, 0.95, 0.18, 48), heatShieldMaterial);
+  heatShield.position.y = -0.95;
+  group.add(heatShield);
+
+  const engineMaterial = new MeshStandardMaterial({
+    color: 0x102040,
+    emissive: new Color(0x1d4fff),
+    emissiveIntensity: 0.15,
+    metalness: 0.8,
+    roughness: 0.3,
+  });
+  const engine = new Mesh(new CylinderGeometry(0.4, 0.55, 0.25, 24), engineMaterial);
+  engine.position.y = -1.2;
+  group.add(engine);
+
+  const solarMaterial = new MeshStandardMaterial({
+    color: 0x0e2f57,
+    emissive: new Color(0x144d8f),
+    emissiveIntensity: 0.25,
+    metalness: 0.25,
+    roughness: 0.35,
+  });
+  const panelLeft = new Mesh(new BoxGeometry(0.1, 0.85, 1.8), solarMaterial);
+  panelLeft.position.set(-1.05, 0, 0);
+  const panelRight = panelLeft.clone();
+  panelRight.position.x = 1.05;
+  group.add(panelLeft);
+  group.add(panelRight);
+
+  const antennaMaterial = new MeshStandardMaterial({
+    color: 0xf1c40f,
+    emissive: new Color(0xf39c12),
+    emissiveIntensity: 0.25,
+    metalness: 0.6,
+    roughness: 0.35,
+  });
+  const antenna = new Mesh(new CylinderGeometry(0.05, 0.05, 1.4, 16), antennaMaterial);
+  antenna.position.set(0, 0.6, -0.65);
+  antenna.rotation.x = Math.PI / 4;
+  group.add(antenna);
+
+  const commsDishMaterial = new MeshStandardMaterial({
+    color: 0xffeaa7,
+    emissive: new Color(0xffd875),
+    emissiveIntensity: 0.18,
+    metalness: 0.2,
+    roughness: 0.5,
+  });
+  const commsDish = new Mesh(new SphereGeometry(0.14, 16, 16), commsDishMaterial);
+  commsDish.position.set(0.95, 0.6, 0);
+  group.add(commsDish);
+
+  capsuleRenderState.renderer = renderer;
+  capsuleRenderState.scene = scene;
+  capsuleRenderState.camera = camera;
+  capsuleRenderState.group = group;
+  capsuleRenderState.hullMaterial = hullMaterial;
+  capsuleRenderState.heatShieldMaterial = heatShieldMaterial;
+  capsuleRenderState.solarMaterial = solarMaterial;
+  capsuleRenderState.engineMaterial = engineMaterial;
+  capsuleRenderState.antennaMaterial = antennaMaterial;
+  capsuleRenderState.baseHullColor = hullMaterial.color.clone();
+  capsuleRenderState.baseHeatShieldColor = heatShieldMaterial.color.clone();
+
+  configureCapsuleInteractivity(capsuleCanvas, capsuleRenderState);
+  resizeCapsuleRenderer();
+  renderer.render(scene, camera);
+}
+
+function configureCapsuleInteractivity(canvas, state) {
+  if (!canvas || state.interactionsBound) {
+    return;
+  }
+
+  canvas.addEventListener('pointerdown', (event) => {
+    state.isDragging = true;
+    state.pointerId = event.pointerId;
+    state.lastPointer.x = event.clientX;
+    state.lastPointer.y = event.clientY;
+    canvas.setPointerCapture?.(event.pointerId);
+    canvas.classList.add('dragging');
+  });
+
+  canvas.addEventListener('pointermove', (event) => {
+    if (!state.isDragging || state.pointerId !== event.pointerId || !state.group) {
+      return;
+    }
+
+    const deltaX = (event.clientX - state.lastPointer.x) / 120;
+    const deltaY = (event.clientY - state.lastPointer.y) / 120;
+    state.group.rotation.y += deltaX;
+    state.group.rotation.x = Math.max(Math.min(state.group.rotation.x + deltaY, Math.PI / 2), -Math.PI / 2);
+    state.lastPointer.x = event.clientX;
+    state.lastPointer.y = event.clientY;
+  });
+
+  const releasePointer = (event) => {
+    if (state.pointerId !== null && event.pointerId !== state.pointerId) {
+      return;
+    }
+    state.isDragging = false;
+    state.pointerId = null;
+    canvas.releasePointerCapture?.(event.pointerId);
+    canvas.classList.remove('dragging');
+    if (state.group) {
+      state.targetRotation = {
+        x: state.group.rotation.x,
+        y: state.group.rotation.y,
+        z: state.group.rotation.z,
+      };
+    }
+  };
+
+  canvas.addEventListener('pointerup', releasePointer);
+  canvas.addEventListener('pointerleave', releasePointer);
+  canvas.addEventListener('pointercancel', releasePointer);
+
+  state.interactionsBound = true;
+}
+
+function startCapsuleAnimation() {
+  ensureCapsuleRenderer();
+  if (!capsuleRenderState.renderer || capsuleRenderState.frameHandle) {
+    return;
+  }
+
+  const animate = () => {
+    if (!capsuleRenderState.renderer || !capsuleRenderState.scene || !capsuleRenderState.camera) {
+      capsuleRenderState.frameHandle = null;
+      return;
+    }
+
+    if (!capsuleRenderState.isDragging && capsuleRenderState.group) {
+      capsuleRenderState.autoAngle =
+        (capsuleRenderState.autoAngle + capsuleRenderState.autoRotate) % (Math.PI * 2);
+      const desiredX = capsuleRenderState.targetRotation.x;
+      const desiredZ = capsuleRenderState.targetRotation.z;
+      const desiredY = capsuleRenderState.targetRotation.y + capsuleRenderState.autoAngle;
+      capsuleRenderState.group.rotation.x += (desiredX - capsuleRenderState.group.rotation.x) * 0.08;
+      capsuleRenderState.group.rotation.z += (desiredZ - capsuleRenderState.group.rotation.z) * 0.08;
+      capsuleRenderState.group.rotation.y += (desiredY - capsuleRenderState.group.rotation.y) * 0.06;
+    }
+
+    capsuleRenderState.renderer.render(
+      capsuleRenderState.scene,
+      capsuleRenderState.camera
+    );
+    capsuleRenderState.frameHandle = requestAnimationFrame(animate);
+  };
+
+  capsuleRenderState.frameHandle = requestAnimationFrame(animate);
+}
+
+function stopCapsuleAnimation() {
+  if (capsuleRenderState.frameHandle) {
+    cancelAnimationFrame(capsuleRenderState.frameHandle);
+    capsuleRenderState.frameHandle = null;
+  }
+}
+
+function resizeCapsuleRenderer() {
+  if (!capsuleRenderState.renderer || !capsuleRenderState.camera || !capsuleCanvas) {
+    return;
+  }
+
+  const rect = capsuleCanvas.getBoundingClientRect();
+  const width = Math.max(rect.width, 300);
+  const height = Math.max(rect.height, 260);
+  capsuleRenderState.renderer.setSize(width, height, false);
+  capsuleRenderState.camera.aspect = width / height;
+  capsuleRenderState.camera.updateProjectionMatrix();
+}
+
+function applyHullSeverity(severity) {
+  if (!capsuleRenderState.hullMaterial || !window.THREE) {
+    return;
+  }
+
+  const THREE = window.THREE;
+  const base = capsuleRenderState.baseHullColor || new THREE.Color(0x4a90e2);
+  const target = new THREE.Color(severityPalette[severity] || severityPalette.nominal);
+  const blended = base.clone().lerp(target, 0.35);
+  capsuleRenderState.hullMaterial.color.lerp(blended, 0.2);
+  capsuleRenderState.hullMaterial.emissive.copy(target);
+  capsuleRenderState.hullMaterial.emissiveIntensity = 0.15;
+}
+
+function updateCapsuleOrientationFromNavigation(navigation) {
+  if (!capsuleRenderState.group || !window.THREE) {
+    return;
+  }
+
+  const { MathUtils } = window.THREE;
+  const pitch = MathUtils.degToRad(Number(navigation.pitch_deg) || 0) * 0.6;
+  const yaw = MathUtils.degToRad(Number(navigation.yaw_deg) || 0);
+  const roll = MathUtils.degToRad(Number(navigation.roll_deg) || 0) * 0.6;
+
+  capsuleRenderState.targetRotation = { x: pitch, y: yaw, z: roll };
+
+  if (typeof navigation.velocity_kps === 'number') {
+    const delta = Math.abs(navigation.velocity_kps - 7.6);
+    capsuleRenderState.autoRotate = 0.002 + Math.min(delta * 0.0015, 0.006);
+  }
+}
+
+function updateCapsulePowerAccents(power) {
+  if (!capsuleRenderState.solarMaterial || !power) {
+    return;
+  }
+
+  const charge = Number(power.battery_charge_percent);
+  if (Number.isNaN(charge)) {
+    return;
+  }
+
+  const normalized = Math.min(Math.max(charge / 100, 0), 1);
+  capsuleRenderState.solarMaterial.emissiveIntensity = 0.2 + normalized * 0.6;
+}
+
+function updateCapsuleThermalAccents(thermal) {
+  if (!capsuleRenderState.heatShieldMaterial || !thermal || !window.THREE) {
+    return;
+  }
+
+  const temp = Number(thermal.hull_temp_c);
+  if (Number.isNaN(temp)) {
+    return;
+  }
+
+  const THREE = window.THREE;
+  const clamped = Math.min(Math.max((temp + 80) / 140, 0), 1);
+  const color = new THREE.Color().setHSL(0.03 + 0.07 * clamped, 0.75, 0.45 + clamped * 0.15);
+  capsuleRenderState.heatShieldMaterial.color.lerp(color, 0.2);
+  capsuleRenderState.heatShieldMaterial.emissive.copy(color);
+  capsuleRenderState.heatShieldMaterial.emissiveIntensity = 0.2 + clamped * 0.9;
+}
+
+function updateCapsulePropulsionAccents(propulsion) {
+  if (!capsuleRenderState.engineMaterial || !propulsion || !window.THREE) {
+    return;
+  }
+
+  const THREE = window.THREE;
+  const acceleration = Math.abs(Number(propulsion.acceleration_mps2) || 0);
+  const engineState = String(propulsion.main_engine_status || '').toLowerCase();
+  const thrustFactor = Math.min(Math.max(acceleration * 12, 0), 1.2);
+  const active = engineState === 'firing' ? 1 : 0;
+  const intensity = 0.2 + thrustFactor + active * 0.8;
+  capsuleRenderState.engineMaterial.emissiveIntensity = Math.min(intensity, 2.5);
+  const color = active || thrustFactor > 0.2 ? 0xff7043 : 0x1d4fff;
+  capsuleRenderState.engineMaterial.emissive.setHex(color);
+}
+
+function updateCapsuleCommsAccents(communications) {
+  if (!capsuleRenderState.antennaMaterial || !communications || !window.THREE) {
+    return;
+  }
+
+  const THREE = window.THREE;
+  const strength = Number(communications.signal_strength_db);
+  if (Number.isNaN(strength)) {
+    return;
+  }
+
+  const normalized = Math.min(Math.max((strength + 130) / 60, 0), 1);
+  capsuleRenderState.antennaMaterial.emissiveIntensity = 0.2 + normalized * 0.8;
+  const color = new THREE.Color().setHSL(0.12 + normalized * 0.08, 0.8, 0.55 + normalized * 0.2);
+  capsuleRenderState.antennaMaterial.color.lerp(color, 0.25);
+  capsuleRenderState.antennaMaterial.emissive.copy(color);
 }
 
 function computeGaugePercent(value, ranges) {
@@ -1026,6 +1447,10 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     closeDetailPanel();
   }
+});
+
+window.addEventListener('resize', () => {
+  resizeCapsuleRenderer();
 });
 
 function updateStatus(state) {

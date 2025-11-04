@@ -54,4 +54,8 @@ understand individual sensor identifiers.
 
 The telemetry front-ends share the same gRPC contract. The CLI offers a lightweight, scriptable console for operators, while the web dashboard runs a FastAPI bridge that relays gRPC telemetry to browsers over WebSockets for richer visualisation and channel filtering. Operators can throttle the on-screen update cadence between 1 Hz and 250 Hz without affecting the underlying 250 Hz ingest, keeping the display legible while Stargate continues to process the full stream. Users can toggle the streaming session on/off to demonstrate backpressure handling and resource cleanup. When operators submit navigation or Captain's Log notes, the client relays them to Stargate so the service can take responsibility for storage once that capability is implemented.
 
+The drill-down modal now adds a Three.js-powered Nyx capsule that mirrors propulsion, thermal, communications, and navigation
+telemetry in real time. Operators can drag to orbit the model for spatial awareness while severity colours and emissive glows
+match the subsystem state, bridging the numeric dashboards with an at-a-glance spatial representation.
+
 Subsystem cards display severity badges derived from channel thresholds, trend arrows to highlight rising/falling metrics, and the web hub emits an emoji-enriched snapshot log every minute so operations teams have a lightweight audit trail even without exporting raw telemetry dumps.

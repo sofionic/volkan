@@ -88,9 +88,17 @@ public sealed class TelemetryStreamService : TelemetryService.TelemetryServiceBa
         var communications = payload.Communications ?? CommunicationMetrics.Empty;
         var structural = payload.Structural ?? StructuralMetrics.Empty;
 
+        // gRPC enforces non-nullable strings, so normalise empty or missing
+        // spacecraft identifiers to an empty string before mapping to the
+        // generated message. This keeps the stream resilient when malformed
+        // UDP packets omit the ID field.
+        var spacecraftId = string.IsNullOrWhiteSpace(payload.SpacecraftId)
+            ? string.Empty
+            : payload.SpacecraftId;
+
         return new Telemetry
         {
-            SpacecraftId = payload.SpacecraftId,
+            SpacecraftId = spacecraftId,
             TimestampMs = payload.TimestampMs,
             LifeSupport = new LifeSupport
             {

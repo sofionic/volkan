@@ -84,6 +84,32 @@ const severityPalette = {
   critical: 0xe74c3c,
 };
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function hexToRgb(hexValue) {
+  const numeric = typeof hexValue === 'string' ? parseInt(hexValue.replace('#', ''), 16) : hexValue;
+  return {
+    r: (numeric >> 16) & 0xff,
+    g: (numeric >> 8) & 0xff,
+    b: numeric & 0xff,
+  };
+}
+
+function blendRgb(base, target, ratio) {
+  return {
+    r: Math.round(base.r + (target.r - base.r) * ratio),
+    g: Math.round(base.g + (target.g - base.g) * ratio),
+    b: Math.round(base.b + (target.b - base.b) * ratio),
+  };
+}
+
+function rgbToCss(rgb, alpha = 1) {
+  const { r, g, b } = rgb;
+  return alpha === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 const capsuleRenderState = {
   renderer: null,
   scene: null,
@@ -104,6 +130,39 @@ const capsuleRenderState = {
   pointerId: null,
   lastPointer: { x: 0, y: 0 },
   interactionsBound: false,
+};
+
+/**
+ * Canvas-based fallback renderer state that is used whenever Three.js fails
+ * to load (for example in fully offline environments or when the CDN is
+ * blocked by local policy). The fallback still reacts to live telemetry
+ * without depending on external libraries.
+ */
+const capsuleFallbackState = {
+  context: null,
+  dpr: window.devicePixelRatio || 1,
+  width: 0,
+  height: 0,
+  isDragging: false,
+  pointerId: null,
+  lastPointer: { x: 0, y: 0 },
+  interactionsBound: false,
+  animationHandle: null,
+  autoAngle: 0,
+  autoRotate: 0.002,
+  targetRotation: { pitch: 0, yaw: 0 },
+  currentRotation: { pitch: 0, yaw: 0 },
+  severity: 'nominal',
+  lastData: null,
+};
+
+const fallbackBaseColors = {
+  hull: hexToRgb(0x4a90e2),
+  heatShield: hexToRgb(0x1c2837),
+  solar: hexToRgb(0x1abc9c),
+  engine: hexToRgb(0x1d4fff),
+  antenna: hexToRgb(0xf39c12),
+  window: hexToRgb(0xbcd4ff),
 };
 
 const channelThresholds = {
@@ -651,16 +710,9 @@ function updateDetailPanel(channel, value) {
 /* -------------------------------------------------------------------------- */
 
 function updateCapsuleVisualization(channel, value, severity) {
-  if (!capsuleCanvas || !window.THREE) {
+  if (!capsuleCanvas) {
     return;
   }
-
-  ensureCapsuleRenderer();
-  if (!capsuleRenderState.renderer) {
-    return;
-  }
-
-  applyHullSeverity(severity);
 
   const navigation =
     (channel === 'navigation' ? value : latestSubsystems.get('navigation')) || undefined;
@@ -672,20 +724,60 @@ function updateCapsuleVisualization(channel, value, severity) {
   const communications =
     (channel === 'communications' ? value : latestSubsystems.get('communications')) || undefined;
 
-  if (navigation) {
-    updateCapsuleOrientationFromNavigation(navigation);
+  if (window.THREE) {
+    ensureCapsuleRenderer();
+    if (!capsuleRenderState.renderer) {
+      return;
+    }
+
+    applyHullSeverity(severity);
+
+    if (navigation) {
+      updateCapsuleOrientationFromNavigation(navigation);
+    }
+
+    updateCapsulePowerAccents(power);
+    updateCapsuleThermalAccents(thermal);
+    updateCapsulePropulsionAccents(propulsion);
+    updateCapsuleCommsAccents(communications);
+    return;
   }
 
-  updateCapsulePowerAccents(power);
-  updateCapsuleThermalAccents(thermal);
-  updateCapsulePropulsionAccents(propulsion);
-  updateCapsuleCommsAccents(communications);
+  ensureFallbackRenderer();
+  if (!capsuleFallbackState.context) {
+    return;
+  }
+
+  capsuleFallbackState.severity = severity;
+  capsuleFallbackState.lastData = {
+    channel,
+    value,
+    navigation,
+    power,
+    thermal,
+    propulsion,
+    communications,
+  };
+
+  updateFallbackOrientationFromNavigation(navigation);
+  renderFallbackCapsule();
 }
 
 function ensureCapsuleRenderer() {
-  if (!capsuleCanvas || capsuleRenderState.renderer || !window.THREE) {
+  if (!capsuleCanvas) {
     return;
   }
+
+  if (!window.THREE) {
+    ensureFallbackRenderer();
+    return;
+  }
+
+  if (capsuleRenderState.renderer) {
+    return;
+  }
+
+  capsuleCanvas.classList.remove('visualizer-unavailable');
 
   const THREE = window.THREE;
   const {
@@ -874,37 +966,106 @@ function configureCapsuleInteractivity(canvas, state) {
   state.interactionsBound = true;
 }
 
-function startCapsuleAnimation() {
-  ensureCapsuleRenderer();
-  if (!capsuleRenderState.renderer || capsuleRenderState.frameHandle) {
+function ensureFallbackRenderer() {
+  if (!capsuleCanvas || capsuleFallbackState.context) {
     return;
   }
 
-  const animate = () => {
-    if (!capsuleRenderState.renderer || !capsuleRenderState.scene || !capsuleRenderState.camera) {
-      capsuleRenderState.frameHandle = null;
+  const context = capsuleCanvas.getContext('2d');
+  if (!context) {
+    capsuleCanvas.classList.add('visualizer-unavailable');
+    return;
+  }
+
+  capsuleCanvas.classList.remove('visualizer-unavailable');
+  capsuleFallbackState.context = context;
+  capsuleFallbackState.dpr = window.devicePixelRatio || 1;
+  configureFallbackInteractivity(capsuleCanvas, capsuleFallbackState);
+  resizeFallbackCanvas();
+}
+
+function configureFallbackInteractivity(canvas, state) {
+  if (!canvas || state.interactionsBound) {
+    return;
+  }
+
+  canvas.addEventListener('pointerdown', (event) => {
+    state.isDragging = true;
+    state.pointerId = event.pointerId;
+    state.lastPointer.x = event.clientX;
+    state.lastPointer.y = event.clientY;
+    canvas.setPointerCapture?.(event.pointerId);
+    canvas.classList.add('dragging');
+  });
+
+  canvas.addEventListener('pointermove', (event) => {
+    if (!state.isDragging || state.pointerId !== event.pointerId) {
       return;
     }
 
-    if (!capsuleRenderState.isDragging && capsuleRenderState.group) {
-      capsuleRenderState.autoAngle =
-        (capsuleRenderState.autoAngle + capsuleRenderState.autoRotate) % (Math.PI * 2);
-      const desiredX = capsuleRenderState.targetRotation.x;
-      const desiredZ = capsuleRenderState.targetRotation.z;
-      const desiredY = capsuleRenderState.targetRotation.y + capsuleRenderState.autoAngle;
-      capsuleRenderState.group.rotation.x += (desiredX - capsuleRenderState.group.rotation.x) * 0.08;
-      capsuleRenderState.group.rotation.z += (desiredZ - capsuleRenderState.group.rotation.z) * 0.08;
-      capsuleRenderState.group.rotation.y += (desiredY - capsuleRenderState.group.rotation.y) * 0.06;
+    const deltaX = (event.clientX - state.lastPointer.x) / 120;
+    const deltaY = (event.clientY - state.lastPointer.y) / 120;
+    state.targetRotation.y += deltaX;
+    state.targetRotation.pitch = clamp(state.targetRotation.pitch + deltaY, -0.9, 0.9);
+    state.lastPointer.x = event.clientX;
+    state.lastPointer.y = event.clientY;
+  });
+
+  const releasePointer = (event) => {
+    if (state.pointerId !== null && event.pointerId !== state.pointerId) {
+      return;
     }
 
-    capsuleRenderState.renderer.render(
-      capsuleRenderState.scene,
-      capsuleRenderState.camera
-    );
-    capsuleRenderState.frameHandle = requestAnimationFrame(animate);
+    state.isDragging = false;
+    state.pointerId = null;
+    canvas.releasePointerCapture?.(event.pointerId);
+    canvas.classList.remove('dragging');
   };
 
-  capsuleRenderState.frameHandle = requestAnimationFrame(animate);
+  canvas.addEventListener('pointerup', releasePointer);
+  canvas.addEventListener('pointerleave', releasePointer);
+  canvas.addEventListener('pointercancel', releasePointer);
+
+  state.interactionsBound = true;
+}
+
+function startCapsuleAnimation() {
+  ensureCapsuleRenderer();
+
+  if (window.THREE && capsuleRenderState.renderer) {
+    if (capsuleRenderState.frameHandle) {
+      return;
+    }
+
+    const animate = () => {
+      if (!capsuleRenderState.renderer || !capsuleRenderState.scene || !capsuleRenderState.camera) {
+        capsuleRenderState.frameHandle = null;
+        return;
+      }
+
+      if (!capsuleRenderState.isDragging && capsuleRenderState.group) {
+        capsuleRenderState.autoAngle =
+          (capsuleRenderState.autoAngle + capsuleRenderState.autoRotate) % (Math.PI * 2);
+        const desiredX = capsuleRenderState.targetRotation.x;
+        const desiredZ = capsuleRenderState.targetRotation.z;
+        const desiredY = capsuleRenderState.targetRotation.y + capsuleRenderState.autoAngle;
+        capsuleRenderState.group.rotation.x += (desiredX - capsuleRenderState.group.rotation.x) * 0.08;
+        capsuleRenderState.group.rotation.z += (desiredZ - capsuleRenderState.group.rotation.z) * 0.08;
+        capsuleRenderState.group.rotation.y += (desiredY - capsuleRenderState.group.rotation.y) * 0.06;
+      }
+
+      capsuleRenderState.renderer.render(
+        capsuleRenderState.scene,
+        capsuleRenderState.camera
+      );
+      capsuleRenderState.frameHandle = requestAnimationFrame(animate);
+    };
+
+    capsuleRenderState.frameHandle = requestAnimationFrame(animate);
+    return;
+  }
+
+  startFallbackAnimation();
 }
 
 function stopCapsuleAnimation() {
@@ -912,33 +1073,297 @@ function stopCapsuleAnimation() {
     cancelAnimationFrame(capsuleRenderState.frameHandle);
     capsuleRenderState.frameHandle = null;
   }
+
+  stopFallbackAnimation();
 }
 
 function resizeCapsuleRenderer() {
-  if (!capsuleRenderState.renderer || !capsuleRenderState.camera || !capsuleCanvas) {
+  if (!capsuleCanvas) {
+    return;
+  }
+
+  if (window.THREE && capsuleRenderState.renderer && capsuleRenderState.camera) {
+    const rect = capsuleCanvas.getBoundingClientRect();
+    const width = Math.max(rect.width, 300);
+    const height = Math.max(rect.height, 260);
+    capsuleRenderState.renderer.setSize(width, height, false);
+    capsuleRenderState.camera.aspect = width / height;
+    capsuleRenderState.camera.updateProjectionMatrix();
+    return;
+  }
+
+  resizeFallbackCanvas();
+  renderFallbackCapsule();
+}
+
+function applyHullSeverity(severity) {
+  if (window.THREE && capsuleRenderState.hullMaterial) {
+    const THREE = window.THREE;
+    const base = capsuleRenderState.baseHullColor || new THREE.Color(0x4a90e2);
+    const target = new THREE.Color(severityPalette[severity] || severityPalette.nominal);
+    const blended = base.clone().lerp(target, 0.35);
+    capsuleRenderState.hullMaterial.color.lerp(blended, 0.2);
+    capsuleRenderState.hullMaterial.emissive.copy(target);
+    capsuleRenderState.hullMaterial.emissiveIntensity = 0.15;
+    return;
+  }
+
+  capsuleFallbackState.severity = severity || 'nominal';
+}
+
+function startFallbackAnimation() {
+  if (!capsuleFallbackState.context || capsuleFallbackState.animationHandle) {
+    return;
+  }
+
+  const tick = () => {
+    if (!capsuleFallbackState.context) {
+      capsuleFallbackState.animationHandle = null;
+      return;
+    }
+
+    if (!capsuleFallbackState.isDragging) {
+      capsuleFallbackState.autoAngle =
+        (capsuleFallbackState.autoAngle + capsuleFallbackState.autoRotate) % (Math.PI * 2);
+    }
+
+    capsuleFallbackState.currentRotation.pitch +=
+      (capsuleFallbackState.targetRotation.pitch - capsuleFallbackState.currentRotation.pitch) * 0.1;
+    capsuleFallbackState.currentRotation.yaw +=
+      (capsuleFallbackState.targetRotation.yaw - capsuleFallbackState.currentRotation.yaw) * 0.08;
+
+    renderFallbackCapsule();
+    capsuleFallbackState.animationHandle = requestAnimationFrame(tick);
+  };
+
+  capsuleFallbackState.animationHandle = requestAnimationFrame(tick);
+}
+
+function stopFallbackAnimation() {
+  if (capsuleFallbackState.animationHandle) {
+    cancelAnimationFrame(capsuleFallbackState.animationHandle);
+    capsuleFallbackState.animationHandle = null;
+  }
+}
+
+function resizeFallbackCanvas() {
+  if (!capsuleCanvas || !capsuleFallbackState.context) {
     return;
   }
 
   const rect = capsuleCanvas.getBoundingClientRect();
   const width = Math.max(rect.width, 300);
   const height = Math.max(rect.height, 260);
-  capsuleRenderState.renderer.setSize(width, height, false);
-  capsuleRenderState.camera.aspect = width / height;
-  capsuleRenderState.camera.updateProjectionMatrix();
+  const dpr = window.devicePixelRatio || 1;
+
+  capsuleFallbackState.width = width;
+  capsuleFallbackState.height = height;
+  capsuleFallbackState.dpr = dpr;
+
+  capsuleCanvas.width = Math.round(width * dpr);
+  capsuleCanvas.height = Math.round(height * dpr);
 }
 
-function applyHullSeverity(severity) {
-  if (!capsuleRenderState.hullMaterial || !window.THREE) {
+function renderFallbackCapsule() {
+  if (!capsuleFallbackState.context || !capsuleCanvas) {
     return;
   }
 
-  const THREE = window.THREE;
-  const base = capsuleRenderState.baseHullColor || new THREE.Color(0x4a90e2);
-  const target = new THREE.Color(severityPalette[severity] || severityPalette.nominal);
-  const blended = base.clone().lerp(target, 0.35);
-  capsuleRenderState.hullMaterial.color.lerp(blended, 0.2);
-  capsuleRenderState.hullMaterial.emissive.copy(target);
-  capsuleRenderState.hullMaterial.emissiveIntensity = 0.15;
+  if (capsuleFallbackState.width === 0 || capsuleFallbackState.height === 0) {
+    resizeFallbackCanvas();
+  }
+
+  const { context } = capsuleFallbackState;
+  const dpr = capsuleFallbackState.dpr;
+  const severity = capsuleFallbackState.severity;
+  const lastData = capsuleFallbackState.lastData;
+  const currentRotation = capsuleFallbackState.currentRotation;
+  const autoAngle = capsuleFallbackState.autoAngle;
+
+  context.save();
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.clearRect(0, 0, capsuleFallbackState.width, capsuleFallbackState.height);
+
+  const renderWidth = capsuleFallbackState.width || 360;
+  const renderHeight = capsuleFallbackState.height || 320;
+  const centerX = renderWidth / 2;
+  const centerY = renderHeight / 2;
+
+  const background = context.createLinearGradient(0, 0, 0, renderHeight);
+  background.addColorStop(0, 'rgba(5, 11, 24, 0.98)');
+  background.addColorStop(1, 'rgba(2, 4, 10, 0.92)');
+  context.fillStyle = background;
+  context.fillRect(0, 0, renderWidth, renderHeight);
+
+  const bodyWidth = renderWidth * 0.46;
+  const bodyHeight = renderHeight * 0.68;
+  const baseHeight = bodyHeight * 0.18;
+  const noseHeight = bodyHeight * 0.3;
+
+  const severityColor = severityPalette[severity] || severityPalette.nominal;
+  const baseHull = fallbackBaseColors.hull;
+  const severityMix = blendRgb(baseHull, hexToRgb(severityColor), 0.25);
+  const shade = blendRgb(severityMix, { r: 18, g: 32, b: 64 }, 0.35);
+  const hullGradient = context.createLinearGradient(
+    centerX - bodyWidth / 2,
+    centerY - bodyHeight / 2,
+    centerX + bodyWidth / 2,
+    centerY + bodyHeight / 2
+  );
+  hullGradient.addColorStop(0, rgbToCss(blendRgb(shade, { r: 255, g: 255, b: 255 }, 0.15)));
+  hullGradient.addColorStop(0.5, rgbToCss(severityMix));
+  hullGradient.addColorStop(1, rgbToCss(blendRgb(severityMix, { r: 8, g: 16, b: 32 }, 0.45)));
+
+  const hullPath = () => {
+    context.beginPath();
+    context.moveTo(centerX - bodyWidth / 2, centerY + bodyHeight / 2 - baseHeight);
+    context.lineTo(centerX - bodyWidth / 2, centerY - bodyHeight / 2 + noseHeight);
+    context.quadraticCurveTo(
+      centerX,
+      centerY - bodyHeight / 2 - noseHeight * 0.25,
+      centerX + bodyWidth / 2,
+      centerY - bodyHeight / 2 + noseHeight
+    );
+    context.lineTo(centerX + bodyWidth / 2, centerY + bodyHeight / 2 - baseHeight);
+    context.quadraticCurveTo(
+      centerX,
+      centerY + bodyHeight / 2 + baseHeight * 1.3,
+      centerX - bodyWidth / 2,
+      centerY + bodyHeight / 2 - baseHeight
+    );
+    context.closePath();
+  };
+
+  hullPath();
+  context.fillStyle = hullGradient;
+  context.fill();
+  context.lineWidth = 2;
+  context.strokeStyle = rgbToCss(blendRgb(severityMix, { r: 6, g: 12, b: 32 }, 0.55));
+  context.stroke();
+
+  const highlightX =
+    centerX + Math.sin(currentRotation.yaw + autoAngle) * (bodyWidth * 0.22);
+  const highlightY =
+    centerY - Math.sin(currentRotation.pitch) * (bodyHeight * 0.2);
+  const highlight = context.createRadialGradient(
+    highlightX,
+    highlightY,
+    bodyWidth * 0.05,
+    highlightX,
+    highlightY,
+    bodyWidth * 0.45
+  );
+  highlight.addColorStop(0, rgbToCss(blendRgb(severityMix, { r: 255, g: 255, b: 255 }, 0.6), 0.85));
+  highlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  context.save();
+  hullPath();
+  context.clip();
+  context.fillStyle = highlight;
+  context.fillRect(centerX - bodyWidth, centerY - bodyHeight, bodyWidth * 2, bodyHeight * 2);
+  context.restore();
+
+  hullPath();
+  context.strokeStyle = 'rgba(12, 24, 48, 0.4)';
+  context.stroke();
+
+  // Heat shield accent influenced by thermal metrics.
+  const thermal = lastData?.thermal;
+  const hullTemp = Number(thermal?.hull_temp_c);
+  const thermalIntensity = Number.isFinite(hullTemp) ? clamp((hullTemp + 60) / 150, 0, 1) : 0;
+  const heatShieldColor = blendRgb(
+    fallbackBaseColors.heatShield,
+    hexToRgb(severityColor),
+    0.2 + thermalIntensity * 0.6
+  );
+  context.beginPath();
+  context.ellipse(centerX, centerY + bodyHeight / 2 - baseHeight * 0.1, bodyWidth * 0.58, baseHeight, 0, 0, Math.PI * 2);
+  context.fillStyle = rgbToCss(heatShieldColor, 0.95);
+  context.fill();
+
+  const propulsion = lastData?.propulsion;
+  const acceleration = Math.abs(Number(propulsion?.acceleration_mps2) || 0);
+  const thrustIntensity = clamp(acceleration / 3, 0, 1);
+  const flame = context.createRadialGradient(centerX, centerY + bodyHeight / 2 + baseHeight * 0.2, 0, centerX, centerY + bodyHeight / 2 + baseHeight * 0.2, bodyWidth * 0.6);
+  flame.addColorStop(0, `rgba(255, 255, 180, ${0.6 * thrustIntensity})`);
+  flame.addColorStop(1, 'rgba(255, 120, 0, 0)');
+  context.fillStyle = flame;
+  context.beginPath();
+  context.moveTo(centerX - bodyWidth * 0.18, centerY + bodyHeight / 2 + baseHeight * 0.2);
+  context.quadraticCurveTo(
+    centerX,
+    centerY + bodyHeight / 2 + baseHeight * (1.6 + thrustIntensity * 1.2),
+    centerX + bodyWidth * 0.18,
+    centerY + bodyHeight / 2 + baseHeight * 0.2
+  );
+  context.closePath();
+  context.fill();
+
+  const power = lastData?.power;
+  const solarOutput = Number(power?.solar_output_kw);
+  const powerLevel = Number.isFinite(solarOutput) ? clamp((solarOutput - 5) / 35, 0, 1) : 0;
+  const panelColor = blendRgb(fallbackBaseColors.solar, { r: 255, g: 255, b: 255 }, 0.15 + powerLevel * 0.45);
+  context.fillStyle = rgbToCss(panelColor, 0.75);
+  const panelWidth = bodyWidth * 0.14;
+  const panelHeight = bodyHeight * 0.65;
+  const panelOffset = bodyWidth * 0.72;
+  context.fillRect(centerX - panelOffset - panelWidth, centerY - panelHeight / 2, panelWidth, panelHeight);
+  context.fillRect(centerX + panelOffset, centerY - panelHeight / 2, panelWidth, panelHeight);
+
+  const communications = lastData?.communications;
+  const signal = Number(communications?.signal_strength_db);
+  const commLevel = Number.isFinite(signal) ? clamp((signal + 120) / 40, 0, 1) : 0;
+  const antennaColor = blendRgb(fallbackBaseColors.antenna, { r: 255, g: 255, b: 255 }, 0.2 + commLevel * 0.5);
+  context.strokeStyle = rgbToCss(antennaColor, 0.85);
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(centerX, centerY - bodyHeight / 2 + noseHeight * 0.4);
+  context.lineTo(centerX, centerY - bodyHeight / 2 - noseHeight * 0.55);
+  context.stroke();
+  context.beginPath();
+  context.arc(centerX, centerY - bodyHeight / 2 - noseHeight * 0.55, bodyWidth * 0.25, -Math.PI / 3, Math.PI / 3);
+  context.stroke();
+
+  const navigation = lastData?.navigation;
+  const velocity = Number(navigation?.velocity_kps);
+  const speedLevel = Number.isFinite(velocity) ? clamp((velocity - 6.5) / 2.5, 0, 1) : 0;
+  context.lineWidth = 2;
+  context.strokeStyle = `rgba(136, 192, 255, ${0.4 + speedLevel * 0.3})`;
+  context.beginPath();
+  context.arc(centerX, centerY, bodyWidth * 0.65, 0, Math.PI * 2);
+  context.stroke();
+
+  const windowColor = blendRgb(fallbackBaseColors.window, { r: 255, g: 255, b: 255 }, 0.25);
+  context.fillStyle = rgbToCss(windowColor, 0.9);
+  context.beginPath();
+  context.ellipse(centerX, centerY - bodyHeight * 0.1, bodyWidth * 0.32, bodyHeight * 0.18, 0, 0, Math.PI * 2);
+  context.fill();
+
+  const highlightChannel = lastData?.channel;
+  if (highlightChannel) {
+    context.font = '12px "Segoe UI", sans-serif';
+    context.textAlign = 'center';
+    context.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    context.fillText(channelTitles[highlightChannel] || formatKey(highlightChannel), centerX, renderHeight - 12);
+  }
+
+  context.restore();
+}
+
+function updateFallbackOrientationFromNavigation(navigation) {
+  if (!navigation) {
+    return;
+  }
+
+  const pitch = ((Number(navigation.pitch_deg) || 0) * Math.PI) / 180;
+  const yaw = ((Number(navigation.yaw_deg) || 0) * Math.PI) / 180;
+  capsuleFallbackState.targetRotation.pitch = clamp(pitch * 0.6, -0.9, 0.9);
+  capsuleFallbackState.targetRotation.yaw = yaw * 0.8;
+
+  const velocity = Number(navigation.velocity_kps);
+  if (!Number.isNaN(velocity)) {
+    const delta = Math.abs(velocity - 7.6);
+    capsuleFallbackState.autoRotate = 0.0015 + Math.min(delta * 0.0012, 0.005);
+  }
 }
 
 function updateCapsuleOrientationFromNavigation(navigation) {

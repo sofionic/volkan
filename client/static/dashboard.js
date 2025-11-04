@@ -45,7 +45,7 @@ const channelOrder = [
 
 const severityScale = ['nominal', 'warning', 'critical'];
 const severityLabels = {
-  nominal: 'Nominal',
+  nominal: 'Stable',
   warning: 'Warning',
   critical: 'Critical',
 };

@@ -191,6 +191,8 @@ view the dashboard:
   important metric in each group.
 * **Detailed telemetry** – formatted metrics grouped by subsystem beneath the overview, with human-friendly units and
   severity badges so you can spot warning/critical states quickly.
+* **Interactive drill-down** – click any overview or detail card to open a modal with live gauges, trend sparkline,
+  threshold ranges, and placeholder PID tuning values for that subsystem.
 * **Emoji log snapshots** – every 60 seconds the dashboard captures the freshest payload and appends an emoji-rich summary
   to `client/logs/telemetry.log` (ignored by Git). Use this rolling file as a lightweight operator audit trail.
 

@@ -25,6 +25,7 @@ body {
   color: rgba(245, 247, 250, 0.7);
 }
 
+/* Layout containers */
 .layout {
   display: grid;
   grid-template-columns: 390px 1fr;
@@ -175,6 +176,7 @@ button:active {
   gap: 1rem;
 }
 
+/* Generic card styling used for overview tiles and detailed channel cards */
 .card {
   background: rgba(8, 16, 32, 0.9);
   border: 1px solid rgba(136, 192, 255, 0.2);
@@ -294,6 +296,13 @@ button:active {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.detail-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(8, 16, 32, 0.45);
 }
 
 .detail-card h3 {
@@ -356,6 +365,193 @@ button:active {
   font-size: 0.95rem;
   font-family: "Fira Code", "Source Code Pro", monospace;
   color: #f5f7fa;
+}
+
+/* Detail overlay for interactive drill-down */
+.detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 8, 15, 0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.detail-overlay[data-visible='true'] {
+  display: flex;
+}
+
+.detail-modal {
+  position: relative;
+  width: min(900px, 100%);
+  background: rgba(11, 20, 36, 0.95);
+  border-radius: 16px;
+  border: 1px solid rgba(136, 192, 255, 0.35);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem;
+}
+
+.detail-close {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f5f7fa;
+  font-size: 1.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.detail-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.detail-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.detail-severity {
+  padding: 0.35rem 1rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.detail-severity[data-severity='nominal'] {
+  background: rgba(46, 204, 113, 0.18);
+  color: #2ecc71;
+}
+
+.detail-severity[data-severity='warning'] {
+  background: rgba(241, 196, 15, 0.18);
+  color: #f1c40f;
+}
+
+.detail-severity[data-severity='critical'] {
+  background: rgba(231, 76, 60, 0.18);
+  color: #e74c3c;
+}
+
+.detail-modal-body {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.gauge-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.gauge-track {
+  width: 100%;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.gauge-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2ecc71, #f1c40f 55%, #e74c3c);
+  transition: width 0.3s ease;
+}
+
+.gauge-value {
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+
+.detail-baselines {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.detail-baselines dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(245, 247, 250, 0.65);
+}
+
+.detail-baselines dd {
+  margin: 0;
+  font-family: "Fira Code", "Source Code Pro", monospace;
+}
+
+.detail-trend-wrapper {
+  background: rgba(6, 12, 24, 0.9);
+  border-radius: 12px;
+  border: 1px solid rgba(136, 192, 255, 0.2);
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-trend-wrapper canvas {
+  width: 100%;
+  height: auto;
+}
+
+.detail-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.detail-meta-group h3 {
+  margin-top: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #88c0ff;
+}
+
+.detail-meta-group ul {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.detail-meta-group li {
+  font-size: 0.9rem;
+  color: rgba(245, 247, 250, 0.85);
+}
+
+@media (max-width: 720px) {
+  .detail-modal {
+    padding: 1.5rem;
+  }
+
+  .detail-close {
+    top: 1rem;
+    right: 1rem;
+  }
 }
 
 @media (max-width: 960px) {

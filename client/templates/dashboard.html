@@ -12,6 +12,7 @@
       <p class="subtitle">Live capsule status across all subsystems</p>
     </header>
 
+    <!-- Main layout contains the operator controls and data views. -->
     <main class="layout">
       <section class="controls">
         <h2>Controls</h2>
@@ -71,6 +72,45 @@
         </section>
       </div>
     </main>
+
+    <!-- Interactive detail overlay that appears when a telemetry card is selected. -->
+    <div id="detail-overlay" class="detail-overlay" data-visible="false" role="dialog" aria-modal="true" aria-hidden="true">
+      <div class="detail-modal">
+        <button id="detail-close" class="detail-close" type="button" aria-label="Close detailed telemetry view">×</button>
+        <header class="detail-modal-header">
+          <h2 id="detail-title">Telemetry Detail</h2>
+          <span id="detail-severity" class="detail-severity" data-severity="nominal">Stable</span>
+        </header>
+        <section class="detail-modal-body">
+          <div class="detail-gauge" aria-live="polite">
+            <div class="gauge-container">
+              <div class="gauge-track">
+                <div id="detail-gauge-fill" class="gauge-fill"></div>
+              </div>
+              <div id="detail-gauge-value" class="gauge-value">—</div>
+            </div>
+            <dl id="detail-baselines" class="detail-baselines"></dl>
+          </div>
+          <div class="detail-trend-wrapper">
+            <canvas id="detail-trend" width="360" height="140" aria-label="Live trend"></canvas>
+          </div>
+        </section>
+        <section class="detail-meta">
+          <div class="detail-meta-group">
+            <h3>Limits</h3>
+            <ul id="detail-limits"></ul>
+          </div>
+          <div class="detail-meta-group">
+            <h3>Alarm Status</h3>
+            <ul id="detail-alarms"></ul>
+          </div>
+          <div class="detail-meta-group">
+            <h3>Control (PID)</h3>
+            <ul id="detail-pid"></ul>
+          </div>
+        </section>
+      </div>
+    </div>
 
     <template id="status-card-template">
       <div class="card status-card status-nominal">

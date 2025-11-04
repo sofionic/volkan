@@ -1,3 +1,8 @@
+/**
+ * Stargate telemetry dashboard runtime.
+ * Coordinates the WebSocket session, renders subsystem summaries,
+ * and powers the interactive drill-down overlay for each channel.
+ */
 const websocketUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`;
 
 const statusTemplate = document.getElementById('status-card-template');
@@ -20,6 +25,21 @@ let shouldReconnect = true;
 let pendingStart = false;
 let streaming = false;
 let currentFrequency = frequencyField ? Number.parseInt(frequencyField.value, 10) || 5 : 5;
+
+const detailOverlay = document.getElementById('detail-overlay');
+const detailCloseButton = document.getElementById('detail-close');
+const detailTitle = document.getElementById('detail-title');
+const detailSeverityPill = document.getElementById('detail-severity');
+const detailGaugeFill = document.getElementById('detail-gauge-fill');
+const detailGaugeValue = document.getElementById('detail-gauge-value');
+const detailBaselines = document.getElementById('detail-baselines');
+const detailTrendCanvas = document.getElementById('detail-trend');
+const detailLimitsList = document.getElementById('detail-limits');
+const detailAlarmList = document.getElementById('detail-alarms');
+const detailPidList = document.getElementById('detail-pid');
+
+let activeDetailChannel = null;
+let activeDetailPayload = null;
 
 const channelTitles = {
   life_support: 'Life Support',
@@ -88,14 +108,26 @@ const channelThresholds = {
 };
 
 const primaryMetrics = {
-  life_support: { key: 'cabin_pressure_kpa', trendThreshold: 0.1, decimals: 1 },
-  crew: { key: 'heart_rate_bpm', trendThreshold: 1.5, decimals: 0 },
-  navigation: { key: 'velocity_kps', trendThreshold: 0.02, decimals: 2 },
-  power: { key: 'battery_charge_percent', trendThreshold: 0.5, decimals: 0 },
-  thermal: { key: 'hull_temp_c', trendThreshold: 0.5, decimals: 1 },
-  propulsion: { key: 'fuel_level_percent', trendThreshold: 0.5, decimals: 0 },
-  communications: { key: 'downlink_rate_mbps', trendThreshold: 1.0, decimals: 1 },
-  structural: { key: 'hull_stress_mpa', trendThreshold: 1.0, decimals: 0 },
+  life_support: { key: 'cabin_pressure_kpa', trendThreshold: 0.1, decimals: 1, unit: 'kPa' },
+  crew: { key: 'heart_rate_bpm', trendThreshold: 1.5, decimals: 0, unit: 'bpm' },
+  navigation: { key: 'velocity_kps', trendThreshold: 0.02, decimals: 2, unit: 'km/s' },
+  power: { key: 'battery_charge_percent', trendThreshold: 0.5, decimals: 0, unit: '%' },
+  thermal: { key: 'hull_temp_c', trendThreshold: 0.5, decimals: 1, unit: '°C' },
+  propulsion: { key: 'fuel_level_percent', trendThreshold: 0.5, decimals: 0, unit: '%' },
+  communications: { key: 'downlink_rate_mbps', trendThreshold: 1.0, decimals: 1, unit: 'Mbps' },
+  structural: { key: 'hull_stress_mpa', trendThreshold: 1.0, decimals: 0, unit: 'MPa' },
+};
+
+/* Dummy PID values keep the overlay readable until real control loops are integrated. */
+const channelPidDefaults = {
+  life_support: { p: 1.2, i: 0.35, d: 0.08 },
+  crew: { p: 0.9, i: 0.25, d: 0.05 },
+  navigation: { p: 1.5, i: 0.4, d: 0.12 },
+  power: { p: 0.8, i: 0.3, d: 0.07 },
+  thermal: { p: 1.1, i: 0.5, d: 0.09 },
+  propulsion: { p: 1.4, i: 0.45, d: 0.11 },
+  communications: { p: 0.7, i: 0.2, d: 0.04 },
+  structural: { p: 1.0, i: 0.3, d: 0.06 },
 };
 
 const channelHistory = new Map(
@@ -368,6 +400,8 @@ function renderOverview(payload) {
       trendLabel.textContent = trend.label;
     }
 
+    card.dataset.channel = key;
+    card.addEventListener('click', () => openDetailPanel(key, payload[key]));
     capsuleStatus.appendChild(clone);
   });
 }
@@ -430,6 +464,7 @@ function renderDetails(payload) {
 
     const card = document.createElement('div');
     card.className = 'detail-card';
+    card.dataset.channel = key;
     const title = document.createElement('h3');
     title.textContent = channelTitles[key] || formatKey(key);
 
@@ -470,7 +505,13 @@ function renderDetails(payload) {
     });
 
     card.appendChild(metrics);
+    card.addEventListener('click', () => openDetailPanel(key, value));
     telemetryTable.appendChild(card);
+
+    if (activeDetailChannel === key) {
+      activeDetailPayload = value;
+      updateDetailPanel(key, value);
+    }
   });
 }
 
@@ -492,6 +533,298 @@ function recordHistory(channel, value) {
   }
   channelHistory.set(channel, history);
   return history;
+}
+
+/* Detail overlay helpers */
+function openDetailPanel(channel, value) {
+  activeDetailChannel = channel;
+  activeDetailPayload = value;
+
+  if (!detailOverlay) {
+    return;
+  }
+
+  detailOverlay.dataset.visible = 'true';
+  detailOverlay.setAttribute('aria-hidden', 'false');
+  updateDetailPanel(channel, value);
+}
+
+function closeDetailPanel() {
+  if (!detailOverlay) {
+    return;
+  }
+
+  detailOverlay.dataset.visible = 'false';
+  detailOverlay.setAttribute('aria-hidden', 'true');
+  activeDetailChannel = null;
+  activeDetailPayload = null;
+}
+
+function updateDetailPanel(channel, value) {
+  if (!detailOverlay || detailOverlay.dataset.visible !== 'true') {
+    return;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return;
+  }
+
+  const title = channelTitles[channel] || formatKey(channel);
+  if (detailTitle) {
+    detailTitle.textContent = title;
+  }
+
+  const severity = determineSeverity(channel, value);
+  if (detailSeverityPill) {
+    detailSeverityPill.dataset.severity = severity;
+    detailSeverityPill.textContent = severityLabels[severity] || severityLabels.nominal;
+  }
+
+  const metricMeta = primaryMetrics[channel];
+  const metricKey = metricMeta ? metricMeta.key : undefined;
+  const metricValue = metricKey && value ? value[metricKey] : undefined;
+
+  if (detailGaugeValue) {
+    detailGaugeValue.textContent =
+      typeof metricValue === 'number'
+        ? formatNumeric(metricValue, metricMeta?.decimals ?? 0, metricMeta?.unit || '')
+        : '—';
+  }
+
+  if (detailGaugeFill) {
+    const ranges = metricKey ? channelThresholds[channel]?.[metricKey] : undefined;
+    const percent = computeGaugePercent(metricValue, ranges);
+    detailGaugeFill.style.width = `${(percent * 100).toFixed(1)}%`;
+  }
+
+  updateBaselineList(metricMeta, metricValue, channelThresholds[channel]);
+  updateLimitsList(metricMeta, channelThresholds[channel]);
+  updateAlarmList(severity, metricMeta, metricValue);
+  updatePidList(channel);
+  renderDetailTrend(channel, severity);
+}
+
+function computeGaugePercent(value, ranges) {
+  if (typeof value !== 'number' || Number.isNaN(value) || !ranges) {
+    return 0.5;
+  }
+
+  const [warningMin, warningMax] = Array.isArray(ranges.warning)
+    ? ranges.warning
+    : [value - 1, value + 1];
+
+  if (typeof warningMin !== 'number' || typeof warningMax !== 'number' || warningMax === warningMin) {
+    return 0.5;
+  }
+
+  const clamped = Math.min(Math.max((value - warningMin) / (warningMax - warningMin), 0), 1);
+  return clamped;
+}
+
+function updateBaselineList(metricMeta, value, thresholds) {
+  if (!detailBaselines) {
+    return;
+  }
+
+  detailBaselines.innerHTML = '';
+
+  if (!metricMeta) {
+    return;
+  }
+
+  const entries = [];
+  entries.push({
+    term: 'Metric',
+    description: `${formatKey(metricMeta.key)}${metricMeta.unit ? ` (${metricMeta.unit})` : ''}`,
+  });
+
+  const currentValue =
+    typeof value === 'number'
+      ? formatNumeric(value, metricMeta.decimals ?? 0, metricMeta.unit || '')
+      : '—';
+  entries.push({ term: 'Current', description: currentValue });
+
+  let setpoint = '—';
+  const ranges = thresholds ? thresholds[metricMeta.key] : undefined;
+  if (ranges && Array.isArray(ranges.nominal)) {
+    const [min, max] = ranges.nominal;
+    if (typeof min === 'number' && typeof max === 'number') {
+      const midpoint = (min + max) / 2;
+      setpoint = formatNumeric(midpoint, metricMeta.decimals ?? 0, metricMeta.unit || '');
+    }
+  }
+
+  entries.push({ term: 'Setpoint', description: setpoint });
+
+  entries.forEach(({ term, description }) => {
+    const dt = document.createElement('dt');
+    dt.textContent = term;
+    const dd = document.createElement('dd');
+    dd.textContent = description;
+    detailBaselines.appendChild(dt);
+    detailBaselines.appendChild(dd);
+  });
+}
+
+function updateLimitsList(metricMeta, thresholds) {
+  if (!detailLimitsList) {
+    return;
+  }
+
+  const items = [];
+
+  if (metricMeta && thresholds && thresholds[metricMeta.key]) {
+    const ranges = thresholds[metricMeta.key];
+    const digits = metricMeta.decimals ?? 0;
+    const unit = metricMeta.unit || '';
+
+    if (Array.isArray(ranges.nominal)) {
+      items.push(`Nominal: ${formatRange(ranges.nominal, digits, unit)}`);
+    }
+
+    if (Array.isArray(ranges.warning)) {
+      items.push(`Warning: ${formatRange(ranges.warning, digits, unit)}`);
+    }
+  } else {
+    items.push('No threshold metadata configured.');
+  }
+
+  renderList(detailLimitsList, items);
+}
+
+function updateAlarmList(severity, metricMeta, value) {
+  if (!detailAlarmList) {
+    return;
+  }
+
+  const entries = [];
+  entries.push(`Status: ${severityLabels[severity] || severityLabels.nominal}`);
+
+  if (metricMeta && typeof value === 'number') {
+    entries.push(
+      `Primary reading: ${formatNumeric(value, metricMeta.decimals ?? 0, metricMeta.unit || '')}`
+    );
+  }
+
+  renderList(detailAlarmList, entries);
+}
+
+function updatePidList(channel) {
+  if (!detailPidList) {
+    return;
+  }
+
+  const pid = channelPidDefaults[channel];
+  if (!pid) {
+    renderList(detailPidList, ['PID coefficients unavailable.']);
+    return;
+  }
+
+  const entries = [
+    `P: ${pid.p.toFixed(2)}`,
+    `I: ${pid.i.toFixed(2)}`,
+    `D: ${pid.d.toFixed(2)}`,
+  ];
+  renderList(detailPidList, entries);
+}
+
+function renderList(target, items) {
+  if (!target) {
+    return;
+  }
+
+  target.innerHTML = '';
+  items.forEach((item) => {
+    const li = document.createElement('li');
+    li.textContent = item;
+    target.appendChild(li);
+  });
+}
+
+function formatRange(range, digits, unit) {
+  const [min, max] = range;
+  const minText =
+    typeof min === 'number' ? formatNumeric(min, digits, '') : '—';
+  const maxText =
+    typeof max === 'number' ? formatNumeric(max, digits, '') : '—';
+  return unit ? `${minText} – ${maxText} ${unit}` : `${minText} – ${maxText}`;
+}
+
+function renderDetailTrend(channel, severity) {
+  if (!detailTrendCanvas) {
+    return;
+  }
+
+  const context = detailTrendCanvas.getContext('2d');
+  if (!context) {
+    return;
+  }
+
+  const history = channelHistory.get(channel) || [];
+  const width = detailTrendCanvas.width;
+  const height = detailTrendCanvas.height;
+  context.clearRect(0, 0, width, height);
+
+  if (history.length < 2) {
+    context.fillStyle = 'rgba(245, 247, 250, 0.6)';
+    context.font = '14px "Segoe UI", sans-serif';
+    context.textAlign = 'center';
+    context.fillText('Trend data pending…', width / 2, height / 2);
+    return;
+  }
+
+  const padding = 20;
+  const min = Math.min(...history);
+  const max = Math.max(...history);
+  const range = max - min || 1;
+
+  const severityColors = {
+    nominal: '#2ecc71',
+    warning: '#f1c40f',
+    critical: '#e74c3c',
+  };
+
+  context.lineWidth = 2;
+  context.lineJoin = 'round';
+  context.strokeStyle = severityColors[severity] || '#88c0ff';
+  context.beginPath();
+
+  history.forEach((value, index) => {
+    const ratio = history.length > 1 ? index / (history.length - 1) : 0;
+    const x = padding + ratio * (width - padding * 2);
+    const normalized = (value - min) / range;
+    const y = height - padding - normalized * (height - padding * 2);
+
+    if (index === 0) {
+      context.moveTo(x, y);
+    } else {
+      context.lineTo(x, y);
+    }
+  });
+
+  context.stroke();
+
+  const latest = history[history.length - 1];
+  const latestRatio = (latest - min) / range;
+  const latestY = height - padding - latestRatio * (height - padding * 2);
+
+  context.setLineDash([4, 4]);
+  context.strokeStyle = 'rgba(136, 192, 255, 0.45)';
+  context.beginPath();
+  context.moveTo(padding, latestY);
+  context.lineTo(width - padding, latestY);
+  context.stroke();
+  context.setLineDash([]);
+
+  context.fillStyle = 'rgba(245, 247, 250, 0.75)';
+  context.font = '12px "Fira Code", monospace';
+  context.textAlign = 'right';
+  const metricMeta = primaryMetrics[channel];
+  const label =
+    metricMeta && typeof latest === 'number'
+      ? formatNumeric(latest, metricMeta.decimals ?? 0, metricMeta.unit || '')
+      : `${latest}`;
+  context.fillText(label, width - padding, latestY - 6);
 }
 
 function determineSeverity(channel, value) {
@@ -674,6 +1007,25 @@ quitButton.addEventListener('click', () => {
   }
   capsuleStatus.innerHTML = '';
   telemetryTable.innerHTML = '';
+  closeDetailPanel();
+});
+
+if (detailCloseButton) {
+  detailCloseButton.addEventListener('click', closeDetailPanel);
+}
+
+if (detailOverlay) {
+  detailOverlay.addEventListener('click', (event) => {
+    if (event.target === detailOverlay) {
+      closeDetailPanel();
+    }
+  });
+}
+
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeDetailPanel();
+  }
 });
 
 function updateStatus(state) {

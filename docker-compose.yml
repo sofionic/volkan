@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  transceiver:
+    build:
+      context: .
+      dockerfile: transceiver/Dockerfile
+    restart: unless-stopped
+
+  stargate:
+    build:
+      context: .
+      dockerfile: stargate/Dockerfile
+    environment:
+      - Transceiver__Host=transceiver
+      - PythonAutomation__Enabled=false
+    ports:
+      - "5000:5000"
+    depends_on:
+      - transceiver
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    environment:
+      - STARGATE_HOST=stargate
+      - STARGATE_PORT=5000
+      - DASHBOARD_HOST=0.0.0.0
+      - DASHBOARD_PORT=8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - stargate

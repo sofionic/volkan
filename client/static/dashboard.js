@@ -5,6 +5,7 @@
  */
 const websocketUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`;
 
+// DOM element lookups for primary dashboard widgets
 const statusTemplate = document.getElementById('status-card-template');
 const capsuleStatus = document.getElementById('capsule-status');
 const telemetryTable = document.getElementById('telemetry-table');
@@ -15,10 +16,12 @@ const frequencyField = document.getElementById('display-frequency');
 const applyFrequencyButton = document.getElementById('apply-frequency');
 const frequencyIndicator = document.getElementById('frequency-status');
 
+// Control buttons for stream lifecycle management
 const startButton = document.getElementById('start');
 const stopButton = document.getElementById('stop');
 const quitButton = document.getElementById('quit');
 
+// Runtime state flags managed by the WebSocket lifecycle
 let socket;
 let activeChannels = new Set(channelCheckboxes.filter((input) => input.checked).map((input) => input.value));
 let shouldReconnect = true;
@@ -26,6 +29,7 @@ let pendingStart = false;
 let streaming = false;
 let currentFrequency = frequencyField ? Number.parseInt(frequencyField.value, 10) || 5 : 5;
 
+// Elements powering the drill-down overlay experience
 const detailOverlay = document.getElementById('detail-overlay');
 const detailCloseButton = document.getElementById('detail-close');
 const detailTitle = document.getElementById('detail-title');
@@ -39,6 +43,7 @@ const detailAlarmList = document.getElementById('detail-alarms');
 const detailPidList = document.getElementById('detail-pid');
 const capsuleCanvas = document.getElementById('capsule-visualizer');
 
+// Track the currently selected subsystem in the detail view
 let activeDetailChannel = null;
 let activeDetailPayload = null;
 
@@ -49,6 +54,7 @@ let activeDetailPayload = null;
  */
 const latestSubsystems = new Map();
 
+// Mapping of subsystem identifiers to friendly titles
 const channelTitles = {
   life_support: 'Life Support',
   crew: 'Crew Health',
@@ -60,6 +66,7 @@ const channelTitles = {
   structural: 'Structural Integrity',
 };
 
+// Preferred render order for subsystem cards
 const channelOrder = [
   'life_support',
   'crew',
@@ -71,6 +78,7 @@ const channelOrder = [
   'structural',
 ];
 
+// Severity vocabulary used across UI widgets
 const severityScale = ['nominal', 'warning', 'critical'];
 const severityLabels = {
   nominal: 'Stable',
@@ -78,12 +86,14 @@ const severityLabels = {
   critical: 'Critical',
 };
 
+// Hex colours used when tinting severity elements
 const severityPalette = {
   nominal: 0x2ecc71,
   warning: 0xf1c40f,
   critical: 0xe74c3c,
 };
 
+// Utility helpers for colour math and value safety
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -156,6 +166,7 @@ const capsuleFallbackState = {
   lastData: null,
 };
 
+// Base colours for the canvas fallback renderer
 const fallbackBaseColors = {
   hull: hexToRgb(0x4a90e2),
   heatShield: hexToRgb(0x1c2837),
@@ -165,6 +176,7 @@ const fallbackBaseColors = {
   window: hexToRgb(0xbcd4ff),
 };
 
+// Threshold bands used to colourise cards and gauges
 const channelThresholds = {
   life_support: {
     cabin_pressure_kpa: { nominal: [98, 102], warning: [96, 104] },
@@ -202,6 +214,7 @@ const channelThresholds = {
   },
 };
 
+// Primary metric for each channel, used in cards and trends
 const primaryMetrics = {
   life_support: { key: 'cabin_pressure_kpa', trendThreshold: 0.1, decimals: 1, unit: 'kPa' },
   crew: { key: 'heart_rate_bpm', trendThreshold: 1.5, decimals: 0, unit: 'bpm' },
@@ -225,11 +238,13 @@ const channelPidDefaults = {
   structural: { p: 1.0, i: 0.3, d: 0.06 },
 };
 
+// Rolling history buffers for sparkline rendering
 const channelHistory = new Map(
   Object.keys(channelTitles).map((channel) => [channel, []])
 );
 const HISTORY_LIMIT = 120;
 
+// Per-channel formatters produce human-friendly metric labels
 const detailFormatters = {
   life_support: (value) => [
     { label: 'Cabin Pressure', value: formatNumeric(value.cabin_pressure_kpa, 1, 'kPa') },
@@ -299,6 +314,7 @@ const detailFormatters = {
   ],
 };
 
+// Establish or reuse the telemetry WebSocket connection
 function ensureSocket() {
   if (!shouldReconnect) {
     return;
@@ -343,6 +359,7 @@ function ensureSocket() {
   });
 }
 
+// Push updated channel/frequency configuration to the hub
 function sendConfiguration() {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     return;
@@ -357,6 +374,7 @@ function sendConfiguration() {
   );
 }
 
+// Send lifecycle commands (start/stop/quit) to the hub
 function sendCommand(action) {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     return;
@@ -365,6 +383,7 @@ function sendCommand(action) {
   socket.send(JSON.stringify({ action }));
 }
 
+// Update UI elements based on hub status messages
 function handleStatus(message) {
   const { state } = message;
 
@@ -422,6 +441,7 @@ function handleStatus(message) {
   }
 }
 
+// Convert snake_case keys into human-friendly labels
 function formatKey(key) {
   return key
     .replace(/_/g, ' ')
@@ -429,6 +449,7 @@ function formatKey(key) {
     .replace(/^./, (char) => char.toUpperCase());
 }
 
+// Render numeric values with fixed decimals and optional unit
 function formatNumeric(value, digits, unit = '') {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     return '—';
@@ -437,6 +458,7 @@ function formatNumeric(value, digits, unit = '') {
   return unit ? `${formatted} ${unit}` : formatted;
 }
 
+// Safely render arbitrary string-like values
 function formatString(value) {
   if (value === undefined || value === null || value === '') {
     return '—';
@@ -444,6 +466,7 @@ function formatString(value) {
   return String(value);
 }
 
+// Combine systolic/diastolic readings into a single string
 function formatBloodPressure(systolic, diastolic) {
   const systolicValue = formatNumeric(systolic, 0);
   const diastolicValue = formatNumeric(diastolic, 0);
@@ -453,6 +476,7 @@ function formatBloodPressure(systolic, diastolic) {
   return `${systolicValue}/${diastolicValue}`;
 }
 
+// Render the high-level capsule summary cards
 function renderOverview(payload) {
   capsuleStatus.innerHTML = '';
   const groups = {
@@ -501,6 +525,7 @@ function renderOverview(payload) {
   });
 }
 
+// Render the detailed channel list and metadata cards
 function renderDetails(payload) {
   telemetryTable.innerHTML = '';
 
@@ -611,6 +636,7 @@ function renderDetails(payload) {
   });
 }
 
+// Track metric history for sparkline rendering and trends
 function recordHistory(channel, value) {
   const definition = primaryMetrics[channel];
   if (!definition || !value || typeof value !== 'object') {
@@ -632,6 +658,7 @@ function recordHistory(channel, value) {
 }
 
 /* Detail overlay helpers */
+// Display the modal overlay with a specific subsystem highlighted
 function openDetailPanel(channel, value) {
   activeDetailChannel = channel;
   activeDetailPayload = value;
@@ -648,6 +675,7 @@ function openDetailPanel(channel, value) {
   updateDetailPanel(channel, value);
 }
 
+// Hide the detail overlay and stop related animations
 function closeDetailPanel() {
   if (!detailOverlay) {
     return;
@@ -660,6 +688,7 @@ function closeDetailPanel() {
   activeDetailPayload = null;
 }
 
+// Refresh detail overlay contents with the latest telemetry sample
 function updateDetailPanel(channel, value) {
   if (!detailOverlay || detailOverlay.dataset.visible !== 'true') {
     return;
@@ -709,6 +738,7 @@ function updateDetailPanel(channel, value) {
 /* Nyx capsule visualization                                                   */
 /* -------------------------------------------------------------------------- */
 
+// Update either the Three.js scene or fallback illustration with new data
 function updateCapsuleVisualization(channel, value, severity) {
   if (!capsuleCanvas) {
     return;
@@ -763,6 +793,7 @@ function updateCapsuleVisualization(channel, value, severity) {
   renderFallbackCapsule();
 }
 
+// Lazily construct the Three.js scene if available
 function ensureCapsuleRenderer() {
   if (!capsuleCanvas) {
     return;
@@ -915,6 +946,7 @@ function ensureCapsuleRenderer() {
   renderer.render(scene, camera);
 }
 
+// Enable pointer-driven rotation on the Three.js view
 function configureCapsuleInteractivity(canvas, state) {
   if (!canvas || state.interactionsBound) {
     return;
@@ -966,6 +998,7 @@ function configureCapsuleInteractivity(canvas, state) {
   state.interactionsBound = true;
 }
 
+// Create the canvas-based fallback renderer when WebGL is missing
 function ensureFallbackRenderer() {
   if (!capsuleCanvas || capsuleFallbackState.context) {
     return;
@@ -984,6 +1017,7 @@ function ensureFallbackRenderer() {
   resizeFallbackCanvas();
 }
 
+// Pointer handling for the 2D fallback visualiser
 function configureFallbackInteractivity(canvas, state) {
   if (!canvas || state.interactionsBound) {
     return;
@@ -1029,6 +1063,7 @@ function configureFallbackInteractivity(canvas, state) {
   state.interactionsBound = true;
 }
 
+// Kick off animation loop appropriate for the active renderer
 function startCapsuleAnimation() {
   ensureCapsuleRenderer();
 
@@ -1068,6 +1103,7 @@ function startCapsuleAnimation() {
   startFallbackAnimation();
 }
 
+// Halt any active animation loop for both renderers
 function stopCapsuleAnimation() {
   if (capsuleRenderState.frameHandle) {
     cancelAnimationFrame(capsuleRenderState.frameHandle);
@@ -1077,6 +1113,7 @@ function stopCapsuleAnimation() {
   stopFallbackAnimation();
 }
 
+// Keep the renderer canvas sized to its container
 function resizeCapsuleRenderer() {
   if (!capsuleCanvas) {
     return;
@@ -1096,6 +1133,7 @@ function resizeCapsuleRenderer() {
   renderFallbackCapsule();
 }
 
+// Blend the hull colour to reflect subsystem severity
 function applyHullSeverity(severity) {
   if (window.THREE && capsuleRenderState.hullMaterial) {
     const THREE = window.THREE;
@@ -1111,6 +1149,7 @@ function applyHullSeverity(severity) {
   capsuleFallbackState.severity = severity || 'nominal';
 }
 
+// Begin the requestAnimationFrame loop for the 2D fallback
 function startFallbackAnimation() {
   if (!capsuleFallbackState.context || capsuleFallbackState.animationHandle) {
     return;
@@ -1139,6 +1178,7 @@ function startFallbackAnimation() {
   capsuleFallbackState.animationHandle = requestAnimationFrame(tick);
 }
 
+// Stop the fallback animation loop when hidden
 function stopFallbackAnimation() {
   if (capsuleFallbackState.animationHandle) {
     cancelAnimationFrame(capsuleFallbackState.animationHandle);
@@ -1146,6 +1186,7 @@ function stopFallbackAnimation() {
   }
 }
 
+// Resize the fallback canvas to match device pixel ratio
 function resizeFallbackCanvas() {
   if (!capsuleCanvas || !capsuleFallbackState.context) {
     return;
@@ -1164,6 +1205,7 @@ function resizeFallbackCanvas() {
   capsuleCanvas.height = Math.round(height * dpr);
 }
 
+// Draw the simplified capsule illustration with telemetry cues
 function renderFallbackCapsule() {
   if (!capsuleFallbackState.context || !capsuleCanvas) {
     return;
@@ -1349,6 +1391,7 @@ function renderFallbackCapsule() {
   context.restore();
 }
 
+// Adjust fallback rotation and auto-rotate speed using navigation data
 function updateFallbackOrientationFromNavigation(navigation) {
   if (!navigation) {
     return;
@@ -1366,6 +1409,7 @@ function updateFallbackOrientationFromNavigation(navigation) {
   }
 }
 
+// Update the Three.js group orientation from navigation telemetry
 function updateCapsuleOrientationFromNavigation(navigation) {
   if (!capsuleRenderState.group || !window.THREE) {
     return;
@@ -1384,6 +1428,7 @@ function updateCapsuleOrientationFromNavigation(navigation) {
   }
 }
 
+// Illuminate solar panels based on battery state of charge
 function updateCapsulePowerAccents(power) {
   if (!capsuleRenderState.solarMaterial || !power) {
     return;
@@ -1398,6 +1443,7 @@ function updateCapsulePowerAccents(power) {
   capsuleRenderState.solarMaterial.emissiveIntensity = 0.2 + normalized * 0.6;
 }
 
+// Heat-shield emissive tint tracks thermal telemetry
 function updateCapsuleThermalAccents(thermal) {
   if (!capsuleRenderState.heatShieldMaterial || !thermal || !window.THREE) {
     return;
@@ -1416,6 +1462,7 @@ function updateCapsuleThermalAccents(thermal) {
   capsuleRenderState.heatShieldMaterial.emissiveIntensity = 0.2 + clamped * 0.9;
 }
 
+// Engine glow intensity reflects acceleration and engine status
 function updateCapsulePropulsionAccents(propulsion) {
   if (!capsuleRenderState.engineMaterial || !propulsion || !window.THREE) {
     return;
@@ -1432,6 +1479,7 @@ function updateCapsulePropulsionAccents(propulsion) {
   capsuleRenderState.engineMaterial.emissive.setHex(color);
 }
 
+// Communications antenna glow reflects link strength
 function updateCapsuleCommsAccents(communications) {
   if (!capsuleRenderState.antennaMaterial || !communications || !window.THREE) {
     return;
@@ -1450,6 +1498,7 @@ function updateCapsuleCommsAccents(communications) {
   capsuleRenderState.antennaMaterial.emissive.copy(color);
 }
 
+// Map a raw metric into 0..1 range for gauge fill
 function computeGaugePercent(value, ranges) {
   if (typeof value !== 'number' || Number.isNaN(value) || !ranges) {
     return 0.5;
@@ -1467,6 +1516,7 @@ function computeGaugePercent(value, ranges) {
   return clamped;
 }
 
+// Populate baseline metric metadata within the detail overlay
 function updateBaselineList(metricMeta, value, thresholds) {
   if (!detailBaselines) {
     return;
@@ -1512,6 +1562,7 @@ function updateBaselineList(metricMeta, value, thresholds) {
   });
 }
 
+// Display nominal and warning bands for the active metric
 function updateLimitsList(metricMeta, thresholds) {
   if (!detailLimitsList) {
     return;
@@ -1538,6 +1589,7 @@ function updateLimitsList(metricMeta, thresholds) {
   renderList(detailLimitsList, items);
 }
 
+// Summarise current alarm context for the subsystem
 function updateAlarmList(severity, metricMeta, value) {
   if (!detailAlarmList) {
     return;
@@ -1555,6 +1607,7 @@ function updateAlarmList(severity, metricMeta, value) {
   renderList(detailAlarmList, entries);
 }
 
+// Surface placeholder PID coefficients until real values exist
 function updatePidList(channel) {
   if (!detailPidList) {
     return;
@@ -1574,6 +1627,7 @@ function updatePidList(channel) {
   renderList(detailPidList, entries);
 }
 
+// Render a simple unordered list within the modal
 function renderList(target, items) {
   if (!target) {
     return;
@@ -1587,6 +1641,7 @@ function renderList(target, items) {
   });
 }
 
+// Format a min/max pair for display in metadata lists
 function formatRange(range, digits, unit) {
   const [min, max] = range;
   const minText =
@@ -1596,6 +1651,7 @@ function formatRange(range, digits, unit) {
   return unit ? `${minText} – ${maxText} ${unit}` : `${minText} – ${maxText}`;
 }
 
+// Draw the per-channel sparkline at the bottom of the modal
 function renderDetailTrend(channel, severity) {
   if (!detailTrendCanvas) {
     return;
@@ -1673,6 +1729,7 @@ function renderDetailTrend(channel, severity) {
   context.fillText(label, width - padding, latestY - 6);
 }
 
+// Evaluate subsystem severity based on configured thresholds
 function determineSeverity(channel, value) {
   const thresholds = channelThresholds[channel];
   if (!thresholds || !value || typeof value !== 'object') {
@@ -1688,6 +1745,7 @@ function determineSeverity(channel, value) {
   return severityScale[worstIndex] || 'nominal';
 }
 
+// Compare a single reading against nominal/warning bands
 function evaluateMetric(rawValue, ranges) {
   if (!ranges) {
     return 0;
@@ -1711,11 +1769,13 @@ function evaluateMetric(rawValue, ranges) {
   return 0;
 }
 
+// Apply CSS classes to reflect severity state
 function applySeverity(element, severity) {
   severityScale.forEach((state) => element.classList.remove(`status-${state}`));
   element.classList.add(`status-${severity}`);
 }
 
+// Derive trend direction and delta labels from history
 function updateTrend(channel, value) {
   const history = recordHistory(channel, value);
   if (!history || history.length === 0) {
@@ -1753,6 +1813,7 @@ function updateTrend(channel, value) {
   };
 }
 
+// Notify the hub about the desired display refresh rate
 function sendFrequencyUpdate() {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     return;
@@ -1766,6 +1827,7 @@ function sendFrequencyUpdate() {
   );
 }
 
+// Validate and submit operator-provided frequency values
 function applyFrequency() {
   if (!frequencyField) {
     return;
@@ -1790,6 +1852,7 @@ function applyFrequency() {
   sendFrequencyUpdate();
 }
 
+// Display validation feedback for the frequency input
 function updateFrequencyIndicator(text, state = 'info') {
   if (!frequencyIndicator) {
     return;
@@ -1878,6 +1941,7 @@ window.addEventListener('resize', () => {
   resizeCapsuleRenderer();
 });
 
+// Synchronise control button states with connection lifecycle
 function updateStatus(state) {
   if (!statusIndicator) {
     return;

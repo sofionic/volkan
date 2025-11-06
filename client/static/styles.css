@@ -1,7 +1,9 @@
+/* Reset base box sizing for layout consistency */
 * {
   box-sizing: border-box;
 }
 
+/* Global typography and background palette */
 body {
   margin: 0;
   font-family: "Segoe UI", Roboto, sans-serif;
@@ -9,23 +11,26 @@ body {
   color: #f5f7fa;
 }
 
+/* Hero header containing mission title */
 .page-header {
   padding: 2rem;
   background: linear-gradient(135deg, #1f3b73, #0b1424 70%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Primary heading styling */
 .page-header h1 {
   margin: 0;
   font-size: 2.5rem;
 }
 
+/* Supporting subtitle copy */
 .subtitle {
   margin: 0.5rem 0 0;
   color: rgba(245, 247, 250, 0.7);
 }
 
-/* Layout containers */
+/* Root grid layout dividing controls and telemetry */
 .layout {
   display: grid;
   grid-template-columns: 390px 1fr;
@@ -33,6 +38,7 @@ body {
   padding: 1.5rem 2rem 3rem;
 }
 
+/* Card styling for controls, overview, and details panes */
 .controls,
 .overview,
 .details {
@@ -42,12 +48,14 @@ body {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
 }
 
+/* Stack cards vertically in the second column */
 .data-column {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
 }
 
+/* Section headers inside dashboard panels */
 .controls h2,
 .overview h2,
 .details h2 {
@@ -58,6 +66,7 @@ body {
   color: #88c0ff;
 }
 
+/* Wrapper for related control form elements */
 .control-group {
   margin-bottom: 1rem;
   display: flex;
@@ -65,6 +74,7 @@ body {
   gap: 0.5rem;
 }
 
+/* Shared input appearance for text and number fields */
 input[type='text'],
 input[type='number'] {
   padding: 0.5rem 0.75rem;
@@ -74,11 +84,13 @@ input[type='number'] {
   color: #f5f7fa;
 }
 
+/* Spacing adjustments for frequency controls */
 .frequency-group {
   margin-bottom: 1.5rem;
   gap: 0.75rem;
 }
 
+/* Align frequency input and apply button */
 .frequency-row {
   display: grid;
   grid-template-columns: 1fr 120px;
@@ -86,16 +98,19 @@ input[type='number'] {
   align-items: center;
 }
 
+/* Status text describing current display frequency */
 .frequency-indicator {
   margin: 0;
   font-size: 0.9rem;
   color: rgba(245, 247, 250, 0.8);
 }
 
+/* Highlight invalid frequency values */
 .frequency-indicator[data-state='error'] {
   color: #f39c12;
 }
 
+/* Outline and spacing for checkbox group */
 fieldset {
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
@@ -103,18 +118,21 @@ fieldset {
   margin: 0 0 1rem;
 }
 
+/* Grid for telemetry channel toggles */
 .channels {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem 1rem;
 }
 
+/* Layout for Start/Stop/Quit controls */
 .buttons {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
+/* Streaming status pill at bottom of controls */
 .status-indicator {
   margin-top: 1.5rem;
   padding: 0.5rem 0.75rem;
@@ -127,17 +145,20 @@ fieldset {
   text-transform: uppercase;
 }
 
+/* Styling when stream is healthy */
 .status-indicator[data-state='streaming'] {
   background: rgba(46, 204, 113, 0.18);
   color: #2ecc71;
 }
 
+/* Styling shared by error and disconnected states */
 .status-indicator[data-state='error'],
 .status-indicator[data-state='disconnected'] {
   background: rgba(231, 76, 60, 0.18);
   color: #e74c3c;
 }
 
+/* Styling for transitional connection phases */
 .status-indicator[data-state='reconnecting'],
 .status-indicator[data-state='starting'],
 .status-indicator[data-state='stopping'] {
@@ -145,6 +166,7 @@ fieldset {
   color: #f1c40f;
 }
 
+/* Base button appearance */
 button {
   padding: 0.75rem;
   border: none;
@@ -156,20 +178,24 @@ button {
   transition: transform 0.15s ease, box-shadow 0.2s ease;
 }
 
+/* Subtle hover lift on control buttons */
 button:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 20px rgba(136, 192, 255, 0.3);
 }
 
+/* Button press feedback */
 button:active {
   transform: translateY(1px);
 }
 
+/* Secondary button variant */
 .secondary {
   background: rgba(255, 255, 255, 0.12);
   color: #f5f7fa;
 }
 
+/* Responsive grid for subsystem cards */
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -187,30 +213,35 @@ button:active {
   flex-direction: column;
 }
 
+/* Accent colors for nominal channel health */
 .status-card.status-nominal,
 .detail-card.status-nominal {
   border-color: rgba(46, 204, 113, 0.45);
   box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.15);
 }
 
+/* Accent colors for warning channel health */
 .status-card.status-warning,
 .detail-card.status-warning {
   border-color: rgba(241, 196, 15, 0.5);
   box-shadow: 0 0 0 1px rgba(241, 196, 15, 0.18);
 }
 
+/* Accent colors for critical channel health */
 .status-card.status-critical,
 .detail-card.status-critical {
   border-color: rgba(231, 76, 60, 0.55);
   box-shadow: 0 0 0 1px rgba(231, 76, 60, 0.25);
 }
 
+/* Vertical spacing inside summary cards */
 .status-card {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
+/* Heading row for card titles and severity pill */
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -218,6 +249,7 @@ button:active {
   gap: 0.75rem;
 }
 
+/* Pill label reflecting subsystem severity */
 .severity-pill {
   padding: 0.2rem 0.75rem;
   border-radius: 999px;
@@ -229,21 +261,25 @@ button:active {
   color: #f5f7fa;
 }
 
+/* Pill color when the subsystem is stable */
 .severity-pill[data-severity='nominal'] {
   background: rgba(46, 204, 113, 0.18);
   color: #2ecc71;
 }
 
+/* Pill color when warnings are present */
 .severity-pill[data-severity='warning'] {
   background: rgba(241, 196, 15, 0.18);
   color: #f1c40f;
 }
 
+/* Pill color when critical issues occur */
 .severity-pill[data-severity='critical'] {
   background: rgba(231, 76, 60, 0.18);
   color: #e74c3c;
 }
 
+/* Typography for subsystem title */
 .card-title {
   margin: 0;
   text-transform: uppercase;
@@ -252,6 +288,7 @@ button:active {
   color: #c5e1ff;
 }
 
+/* Monospaced metric list within cards */
 .card-body {
   margin: 0;
   white-space: pre-line;
@@ -259,6 +296,7 @@ button:active {
   font-size: 0.95rem;
 }
 
+/* Container anchoring trend badge at bottom */
 .card-trend {
   display: flex;
   justify-content: flex-end;
@@ -267,27 +305,33 @@ button:active {
   margin-top: auto;
 }
 
+/* Trend color when metrics increase */
 .trend-label[data-trend='rising'] {
   color: #2ecc71;
 }
 
+/* Trend color when metrics decrease */
 .trend-label[data-trend='falling'] {
   color: #e74c3c;
 }
 
+/* Trend color when metrics hold steady */
 .trend-label[data-trend='steady'] {
   color: #88c0ff;
 }
 
+/* Fallback color when trend cannot be determined */
 .trend-label[data-trend='unknown'] {
   color: rgba(245, 247, 250, 0.6);
 }
 
+/* Grid container for detail view cards */
 .detail-grid {
   display: grid;
   gap: 1rem;
 }
 
+/* Card styling reused in detail overlay */
 .detail-card {
   background: rgba(8, 16, 32, 0.9);
   border-radius: 10px;
@@ -300,11 +344,13 @@ button:active {
   transition: transform 0.15s ease, box-shadow 0.2s ease;
 }
 
+/* Hover emphasis for detail cards */
 .detail-card:hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 24px rgba(8, 16, 32, 0.45);
 }
 
+/* Title row within detail cards */
 .detail-card h3 {
   margin: 0;
   font-size: 1rem;
@@ -316,6 +362,7 @@ button:active {
   gap: 0.75rem;
 }
 
+/* Inline badge summarising severity in detail cards */
 .severity-badge {
   font-size: 0.7rem;
   padding: 0.15rem 0.6rem;
@@ -328,39 +375,46 @@ button:active {
   margin-left: auto;
 }
 
+/* Severity badge when stable */
 .severity-badge.severity-nominal {
   background: rgba(46, 204, 113, 0.18);
   color: #2ecc71;
 }
 
+/* Severity badge when warnings detected */
 .severity-badge.severity-warning {
   background: rgba(241, 196, 15, 0.18);
   color: #f1c40f;
 }
 
+/* Severity badge when critical */
 .severity-badge.severity-critical {
   background: rgba(231, 76, 60, 0.18);
   color: #e74c3c;
 }
 
+/* Grid arrangement for metric list */
 .detail-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.75rem;
 }
 
+/* Individual metric container */
 .metric {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
+/* Label styling inside metric item */
 .metric-label {
   font-size: 0.8rem;
   letter-spacing: 0.05em;
   color: rgba(245, 247, 250, 0.7);
 }
 
+/* Monospace value text for metric */
 .metric-value {
   font-size: 0.95rem;
   font-family: "Fira Code", "Source Code Pro", monospace;
@@ -380,10 +434,12 @@ button:active {
   backdrop-filter: blur(4px);
 }
 
+/* Make the overlay visible when toggled */
 .detail-overlay[data-visible='true'] {
   display: flex;
 }
 
+/* Modal container housing the drill-down content */
 .detail-modal {
   position: relative;
   width: min(900px, 100%);
@@ -397,6 +453,7 @@ button:active {
   padding: 2rem;
 }
 
+/* Close button styling for detail modal */
 .detail-close {
   position: absolute;
   top: 1.5rem;
@@ -415,10 +472,12 @@ button:active {
   transition: background 0.2s ease;
 }
 
+/* Hover state for modal close button */
 .detail-close:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Header row inside detail modal */
 .detail-modal-header {
   display: flex;
   align-items: center;
@@ -426,6 +485,7 @@ button:active {
   gap: 1rem;
 }
 
+/* Severity pill shown next to modal title */
 .detail-severity {
   padding: 0.35rem 1rem;
   border-radius: 999px;
@@ -435,21 +495,25 @@ button:active {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* Modal severity pill when stable */
 .detail-severity[data-severity='nominal'] {
   background: rgba(46, 204, 113, 0.18);
   color: #2ecc71;
 }
 
+/* Modal severity pill when warnings detected */
 .detail-severity[data-severity='warning'] {
   background: rgba(241, 196, 15, 0.18);
   color: #f1c40f;
 }
 
+/* Modal severity pill when critical */
 .detail-severity[data-severity='critical'] {
   background: rgba(231, 76, 60, 0.18);
   color: #e74c3c;
 }
 
+/* Responsive grid inside modal body */
 .detail-modal-body {
   display: grid;
   gap: 1.5rem;
@@ -462,10 +526,12 @@ button:active {
  * Retaining the element in the DOM lets us restore the viewer later
  * without rewiring the JavaScript event lifecycle.
  */
+/* Hidden placeholder for future Nyx visual */
 .detail-visualization {
   display: none;
 }
 
+/* Canvas styling retained for future visualiser */
 .detail-visualization canvas {
   width: 100%;
   height: 100%;
@@ -475,6 +541,7 @@ button:active {
   position: relative;
 }
 
+/* Cursor cue while dragging the canvas */
 .detail-visualization canvas.dragging {
   cursor: grabbing;
 }
@@ -500,12 +567,14 @@ button:active {
   pointer-events: none;
 }
 
+/* Gauge plus metadata wrapper */
 .gauge-container {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
+/* Track styling behind gauge fill */
 .gauge-track {
   width: 100%;
   height: 20px;
@@ -514,6 +583,7 @@ button:active {
   overflow: hidden;
 }
 
+/* Gradient fill indicating severity */
 .gauge-fill {
   height: 100%;
   width: 0;
@@ -522,17 +592,20 @@ button:active {
   transition: width 0.3s ease;
 }
 
+/* Prominent numeric value below gauge */
 .gauge-value {
   font-size: 1.75rem;
   font-weight: 600;
 }
 
+/* Baseline metadata list */
 .detail-baselines {
   margin: 0;
   display: grid;
   gap: 0.35rem;
 }
 
+/* Label styling for baselines */
 .detail-baselines dt {
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -540,11 +613,13 @@ button:active {
   color: rgba(245, 247, 250, 0.65);
 }
 
+/* Value styling for baselines */
 .detail-baselines dd {
   margin: 0;
   font-family: "Fira Code", "Source Code Pro", monospace;
 }
 
+/* Container for sparkline canvas */
 .detail-trend-wrapper {
   background: rgba(6, 12, 24, 0.9);
   border-radius: 12px;
@@ -555,17 +630,20 @@ button:active {
   justify-content: center;
 }
 
+/* Ensure trend canvas scales responsively */
 .detail-trend-wrapper canvas {
   width: 100%;
   height: auto;
 }
 
+/* Grid for limits, alarms, and PID blocks */
 .detail-meta {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
 }
 
+/* Section title inside meta group */
 .detail-meta-group h3 {
   margin-top: 0;
   font-size: 0.95rem;
@@ -574,6 +652,7 @@ button:active {
   color: #88c0ff;
 }
 
+/* List styling inside meta group */
 .detail-meta-group ul {
   margin: 0;
   padding-left: 1rem;
@@ -582,11 +661,13 @@ button:active {
   gap: 0.35rem;
 }
 
+/* Bullet styling for detail metadata entries */
 .detail-meta-group li {
   font-size: 0.9rem;
   color: rgba(245, 247, 250, 0.85);
 }
 
+/* Compact modal spacing on smaller screens */
 @media (max-width: 720px) {
   .detail-modal {
     padding: 1.5rem;
@@ -598,11 +679,13 @@ button:active {
   }
 }
 
+/* Collapse two-column layout on tablets */
 @media (max-width: 960px) {
   .layout {
     grid-template-columns: 1fr;
   }
 
+  /* Allow buttons to wrap on smaller widths */
   .buttons {
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   }

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stargate Telemetry Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <h1>Stargate Telemetry Dashboard</h1>
+      <p class="subtitle">Live capsule status across all subsystems</p>
+    </header>
+
+    <!-- Main layout contains the operator controls and data views. -->
+    <main class="layout">
+      <section class="controls">
+        <h2>Controls</h2>
+        <div class="control-group">
+          <label for="spacecraft">Spacecraft ID</label>
+          <input id="spacecraft" type="text" placeholder="All spacecraft" />
+        </div>
+        <fieldset>
+          <legend>Telemetry Channels</legend>
+          <div class="channels">
+            <label><input type="checkbox" value="life_support" checked /> Life Support</label>
+            <label><input type="checkbox" value="crew" /> Crew Health</label>
+            <label><input type="checkbox" value="navigation" checked /> Navigation</label>
+            <label><input type="checkbox" value="power" checked /> Power</label>
+            <label><input type="checkbox" value="thermal" checked /> Thermal</label>
+            <label><input type="checkbox" value="propulsion" checked /> Propulsion</label>
+            <label><input type="checkbox" value="communications" /> Communications</label>
+            <label><input type="checkbox" value="structural" /> Structural</label>
+          </div>
+        </fieldset>
+
+        <div class="control-group frequency-group">
+          <label for="display-frequency">Display Frequency (Hz)</label>
+          <div class="frequency-row">
+            <input
+              id="display-frequency"
+              type="number"
+              min="1"
+              max="250"
+              step="1"
+              value="5"
+              inputmode="numeric"
+              pattern="[0-9]*"
+            />
+            <button id="apply-frequency" type="button">Apply</button>
+          </div>
+          <p id="frequency-status" class="frequency-indicator" data-state="info">Display frequency: 5 Hz</p>
+        </div>
+
+        <div class="buttons">
+          <button id="start">Start</button>
+          <button id="stop">Stop</button>
+          <button id="quit" class="secondary">Quit</button>
+        </div>
+        <p id="status" class="status-indicator">Disconnected</p>
+      </section>
+
+      <div class="data-column">
+        <section class="overview">
+          <h2>Capsule Overview</h2>
+          <div id="capsule-status" class="card-grid"></div>
+        </section>
+
+        <section class="details">
+          <h2>Detailed Telemetry</h2>
+          <div id="telemetry-table" class="detail-grid"></div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Interactive detail overlay that appears when a telemetry card is selected. -->
+    <div id="detail-overlay" class="detail-overlay" data-visible="false" role="dialog" aria-modal="true" aria-hidden="true">
+      <div class="detail-modal">
+        <button id="detail-close" class="detail-close" type="button" aria-label="Close detailed telemetry view">×</button>
+        <header class="detail-modal-header">
+          <h2 id="detail-title">Telemetry Detail</h2>
+          <span id="detail-severity" class="detail-severity" data-severity="nominal">Stable</span>
+        </header>
+        <section class="detail-modal-body">
+          <!-- Interactive Nyx capsule visualization rendered with Three.js. -->
+          <div class="detail-visualization" aria-live="polite">
+            <canvas id="capsule-visualizer" aria-label="Nyx capsule 3D overview"></canvas>
+          </div>
+          <div class="detail-gauge" aria-live="polite">
+            <div class="gauge-container">
+              <div class="gauge-track">
+                <div id="detail-gauge-fill" class="gauge-fill"></div>
+              </div>
+              <div id="detail-gauge-value" class="gauge-value">—</div>
+            </div>
+            <dl id="detail-baselines" class="detail-baselines"></dl>
+          </div>
+          <div class="detail-trend-wrapper">
+            <canvas id="detail-trend" width="360" height="140" aria-label="Live trend"></canvas>
+          </div>
+        </section>
+        <section class="detail-meta">
+          <div class="detail-meta-group">
+            <h3>Limits</h3>
+            <ul id="detail-limits"></ul>
+          </div>
+          <div class="detail-meta-group">
+            <h3>Alarm Status</h3>
+            <ul id="detail-alarms"></ul>
+          </div>
+          <div class="detail-meta-group">
+            <h3>Control (PID)</h3>
+            <ul id="detail-pid"></ul>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <template id="status-card-template">
+      <div class="card status-card status-nominal">
+        <div class="card-header">
+          <h3 class="card-title"></h3>
+          <span class="severity-pill" data-severity="nominal">Nominal</span>
+        </div>
+        <p class="card-body"></p>
+        <div class="card-trend">
+          <span class="trend-label" data-trend="steady">Trend —</span>
+        </div>
+      </div>
+    </template>
+
+    <!-- Three.js powers the interactive Nyx model; loaded before the dashboard runtime. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js" integrity="sha512-sWZ3JE+PE0RduCMsZ/HlaEJJkzA6ECJMvliK74XAiGDNAPJ2DzffI3owWBwB2404zt0QtwXwhsQU4/IDnnUyOw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type="module" src="/static/dashboard.js"></script>
+  </body>
+</html>

@@ -84,6 +84,9 @@ class ClientSession:
     active: bool = False
     display_hz: int = 5
     last_sent_monotonic: float = 0.0
+    pending_send: Optional[asyncio.Task] = field(
+        default=None, init=False, repr=False
+    )
 
 
 class TelemetryHub:
@@ -167,6 +170,10 @@ class TelemetryHub:
             "Closing client %s due to: %s", session.websocket.client, reason
         )
         session.active = False
+        pending = session.pending_send
+        if pending and not pending.done():
+            pending.cancel()
+        session.pending_send = None
         try:
             await session.websocket.close(code=1011, reason=reason)
         except Exception:  # pragma: no cover - defensive cleanup
@@ -277,28 +284,13 @@ class TelemetryHub:
         async with self._lock:
             sessions = list(self._clients)
 
-        coroutines = []
-        active_sessions: List[ClientSession] = []
         for session in sessions:
             if not session.active:
                 continue
             if session.spacecraft_id and session.spacecraft_id != spacecraft_id:
                 continue
 
-            coroutines.append(self._emit_payload(session, payload))
-            active_sessions.append(session)
-
-        if not coroutines:
-            return
-
-        results = await asyncio.gather(*coroutines, return_exceptions=True)
-        for session, result in zip(active_sessions, results):
-            if isinstance(result, Exception):
-                LOGGER.debug(
-                    "Error while sending telemetry to %s: %s",
-                    session.websocket.client,
-                    result,
-                )
+            self._schedule_emit(session, payload)
 
     async def _emit_latest(self, session: ClientSession, force: bool = False) -> None:
         """Emit the most recent payload to a session, optionally bypassing throttling."""
@@ -306,7 +298,53 @@ class TelemetryHub:
         if not session.active or self._latest_payload is None:
             return
 
-        await self._emit_payload(session, self._latest_payload, force=force)
+        task = self._schedule_emit(session, self._latest_payload, force=force)
+        if task and force:
+            try:
+                await task
+            except Exception:  # pragma: no cover - defensive logging
+                LOGGER.debug("Forced emit failed for %s", session.websocket.client)
+
+    def _schedule_emit(
+        self, session: ClientSession, payload: Dict, *, force: bool = False
+    ) -> Optional[asyncio.Task]:
+        """Dispatch a payload send task without blocking the gRPC stream."""
+
+        if session.pending_send and not session.pending_send.done():
+            if not force:
+                return None
+            session.pending_send.cancel()
+
+        async def _runner() -> None:
+            try:
+                await self._emit_payload(session, payload, force=force)
+            finally:
+                session.pending_send = None
+
+        task = asyncio.create_task(_runner())
+        session.pending_send = task
+        task.add_done_callback(
+            lambda completed, active_session=session: self._handle_send_result(
+                active_session, completed
+            )
+        )
+        return task
+
+    def _handle_send_result(
+        self, session: ClientSession, task: asyncio.Task
+    ) -> None:
+        """Log background send failures without interrupting the stream."""
+
+        if task.cancelled():
+            return
+
+        exc = task.exception()
+        if exc:
+            LOGGER.debug(
+                "Background send failed for %s: %s",
+                session.websocket.client,
+                exc,
+            )
 
     async def _emit_payload(
         self, session: ClientSession, payload: Dict, *, force: bool = False

@@ -246,6 +246,18 @@ The first run builds each image; subsequent runs can use `docker compose up` wit
 
 Stop the stack with `docker compose down`. Override ports or environment variables in `docker-compose.yml` as needed.
 
+### Windows helper scripts
+
+If you prefer not to type Docker commands, run the batch files under
+`scripts/windows/`:
+
+* `start-docker-stack.bat` – launches the stack with `docker compose up --build -d`
+  (pass `--no-build` to skip rebuilding images).
+* `stop-docker-stack.bat` – stops the stack with `docker compose down`.
+
+Each script resolves the repository root automatically, so you can launch them
+from File Explorer or any terminal.
+
 ## Verification & testing
 
 Run the quick regression checks below once the services are installed locally:

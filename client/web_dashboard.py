@@ -315,13 +315,17 @@ class TelemetryHub:
                 return None
             session.pending_send.cancel()
 
+        task_ref: Optional[asyncio.Task] = None
+
         async def _runner() -> None:
             try:
                 await self._emit_payload(session, payload, force=force)
             finally:
-                session.pending_send = None
+                if session.pending_send is task_ref:
+                    session.pending_send = None
 
         task = asyncio.create_task(_runner())
+        task_ref = task
         session.pending_send = task
         task.add_done_callback(
             lambda completed, active_session=session: self._handle_send_result(

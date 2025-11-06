@@ -2,6 +2,22 @@
 
 TEC's Stargate initiative connects spacecraft telemetry sources with the teams that need live insight during multiplanetary missions. This repository contains a prototype of the core telemetry chain and documents how an additional gateway component will integrate later. The present proof of concept demonstrates three running services while reserving space for a fourth ingestion gateway:
 
+## Quick start options
+
+Whichever path you choose, open the FastAPI dashboard at **http://127.0.0.1:8000** once the services are running.
+
+1. **Docker Compose (scripted or manual)**
+   * Ensure Docker Desktop (or another Docker Engine) is running.
+   * From the repository root, either run `docker compose up --build` manually **or** double-click `scripts\windows\start-docker-stack.bat` (use `stop-docker-stack.bat` when you are done). The helper script simply wraps `docker compose up` so you do not need to remember the command.
+
+2. **Published `StargateService.exe` bundle**
+   * Publish the .NET service (e.g. `dotnet publish -c Release -o publish stargate/StargateService/StargateService.csproj`).
+   * Navigate to the publish directory and launch `StargateService.exe`. The executable automatically starts the bundled BLonQ mock and FastAPI dashboard as long as Python 3.10+ with the required packages is available.
+
+3. **Visual Studio run configuration**
+   * Open `stargate/Stargate.sln` in Visual Studio 2022 (v17.14.19 or newer).
+   * Select the `StargateService` project and press **Run** (`F5`). The automation settings in `launchSettings.json` mirror the published executable, so the mock and dashboard start alongside the gRPC host.
+
 1. **BLonQ Transceiver Mock** – emits pseudo telemetry over UDP at 250 Hz. The generator mimics the BLonQ hardware interface today but can be swapped for a gateway-fed source without altering downstream components.
 2. **Stargate Service** – a C# gRPC service that ingests UDP telemetry, validates and buffers it, then publishes streams to clients.
 3. **Telemetry Front-Ends** – Python-based operator tools: an interactive CLI for quick diagnostics and a FastAPI web dashboard for rich visualisation and channel filtering.

@@ -457,18 +457,13 @@ button:active {
 }
 
 /*
- * Three.js Nyx capsule canvas lives inside this wrapper so we can
- * guarantee aspect ratio and a subtle backdrop regardless of theme.
+ * Operator request: temporarily hide the Nyx capsule visual so the
+ * unfinished artwork does not distract from the telemetry gauges.
+ * Retaining the element in the DOM lets us restore the viewer later
+ * without rewiring the JavaScript event lifecycle.
  */
 .detail-visualization {
-  background: rgba(6, 12, 24, 0.9);
-  border: 1px solid rgba(136, 192, 255, 0.2);
-  border-radius: 12px;
-  padding: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 260px;
+  display: none;
 }
 
 .detail-visualization canvas {

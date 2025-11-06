@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Options;
 using Stargate.Options;
@@ -121,16 +122,14 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
             return null;
         }
 
-        var baseDirectory = ResolveBaseDirectory();
-        var workingDirectory = ResolveWorkingDirectory(baseDirectory, processOptions.WorkingDirectory);
-        var scriptPath = ResolveScriptPath(baseDirectory, processOptions.Script);
+        var baseDirectories = EnumerateBaseDirectoryCandidates().ToList();
 
-        if (!File.Exists(scriptPath))
+        if (!TryResolveProcessPaths(processOptions, baseDirectories, out var workingDirectory, out var scriptPath))
         {
             _logger.LogWarning(
-                "Unable to find Python script {Script}. Expected at {ResolvedPath}.",
+                "Unable to find Python script {Script}. Checked base directories: {Candidates}.",
                 processOptions.Script,
-                scriptPath);
+                string.Join(", ", baseDirectories));
             return null;
         }
 
@@ -217,17 +216,57 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
         return null;
     }
 
-    /// <summary>
-    /// Resolve the working directory root where child processes should execute.
+    /// Attempt to find the working directory and script location using any of the
+    /// configured or implicit base directories (project root, publish folder, etc.).
+    /// <paramref name="baseDirectories"/> is precomputed so we can log the paths we
+    /// attempted if no script is found.
     /// </summary>
-    private string ResolveBaseDirectory()
+    private bool TryResolveProcessPaths(
+        PythonProcessOptions processOptions,
+        IEnumerable<string> baseDirectories,
+        out string workingDirectory,
+        out string scriptPath)
     {
-        if (string.IsNullOrWhiteSpace(_options.BaseWorkingDirectory))
+        foreach (var baseDirectory in baseDirectories)
         {
-            return _environment.ContentRootPath;
+            var candidateWorkingDirectory = ResolveWorkingDirectory(baseDirectory, processOptions.WorkingDirectory);
+            var candidateScriptPath = ResolveScriptPath(baseDirectory, processOptions.Script);
+
+            if (!File.Exists(candidateScriptPath))
+            {
+                continue;
+            }
+
+            workingDirectory = candidateWorkingDirectory;
+            scriptPath = candidateScriptPath;
+            return true;
         }
 
-        return Path.GetFullPath(Path.Combine(_environment.ContentRootPath, _options.BaseWorkingDirectory));
+        workingDirectory = string.Empty;
+        scriptPath = string.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// Provide the ordered set of base directories that may contain Python assets.
+    /// </summary>
+    private IEnumerable<string> EnumerateBaseDirectoryCandidates()
+    {
+        if (!string.IsNullOrWhiteSpace(_options.BaseWorkingDirectory))
+        {
+            yield return Path.GetFullPath(Path.Combine(
+                _environment.ContentRootPath,
+                _options.BaseWorkingDirectory));
+        }
+
+        yield return _environment.ContentRootPath;
+
+        var appBase = AppContext.BaseDirectory;
+
+        if (!string.Equals(appBase, _environment.ContentRootPath, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return appBase;
+        }
     }
 
     /// <summary>

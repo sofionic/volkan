@@ -31,6 +31,9 @@ from telemetry_pb2_grpc import TelemetryServiceStub  # type: ignore  # noqa: E40
 
 LOGGER = logging.getLogger("telemetry.web")
 
+# Maximum time in seconds to wait for a WebSocket send before dropping a client.
+SEND_TIMEOUT_SECONDS = 0.5
+
 
 def _is_port_available(host: str, port: int) -> bool:
     """Return True if the dashboard can bind to the requested TCP port."""
@@ -157,6 +160,19 @@ class TelemetryHub:
                 pass
         LOGGER.info("Client disconnected: %s", session.websocket.client)
 
+    async def _drop_session(self, session: ClientSession, reason: str) -> None:
+        """Close and unregister a misbehaving client session."""
+
+        LOGGER.warning(
+            "Closing client %s due to: %s", session.websocket.client, reason
+        )
+        session.active = False
+        try:
+            await session.websocket.close(code=1011, reason=reason)
+        except Exception:  # pragma: no cover - defensive cleanup
+            LOGGER.debug("Client already closed while dropping: %s", reason)
+        await self.unregister(session)
+
     async def handle_message(self, session: ClientSession, payload: Dict) -> None:
         """Update a client session based on an incoming JSON command."""
 
@@ -261,13 +277,28 @@ class TelemetryHub:
         async with self._lock:
             sessions = list(self._clients)
 
+        coroutines = []
+        active_sessions: List[ClientSession] = []
         for session in sessions:
             if not session.active:
                 continue
             if session.spacecraft_id and session.spacecraft_id != spacecraft_id:
                 continue
 
-            await self._emit_payload(session, payload)
+            coroutines.append(self._emit_payload(session, payload))
+            active_sessions.append(session)
+
+        if not coroutines:
+            return
+
+        results = await asyncio.gather(*coroutines, return_exceptions=True)
+        for session, result in zip(active_sessions, results):
+            if isinstance(result, Exception):
+                LOGGER.debug(
+                    "Error while sending telemetry to %s: %s",
+                    session.websocket.client,
+                    result,
+                )
 
     async def _emit_latest(self, session: ClientSession, force: bool = False) -> None:
         """Emit the most recent payload to a session, optionally bypassing throttling."""
@@ -287,9 +318,16 @@ class TelemetryHub:
 
         filtered = self._filter_payload(payload, session.channels)
         try:
-            await session.websocket.send_text(json.dumps(filtered))
-        except (RuntimeError, WebSocketDisconnect):
-            LOGGER.debug("Dropping payload for disconnected client")
+            await asyncio.wait_for(
+                session.websocket.send_text(json.dumps(filtered)),
+                timeout=SEND_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            await self._drop_session(session, "WebSocket send timed out")
+        except WebSocketDisconnect:
+            await self.unregister(session)
+        except RuntimeError:
+            await self._drop_session(session, "WebSocket runtime failure")
 
     @staticmethod
     def _filter_payload(payload: Dict, channels: Set[str]) -> Dict:

@@ -12,4 +12,17 @@
   <ItemGroup>
     <Protobuf Include="Proto/telemetry.proto" GrpcServices="Server" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\\..\\client\\**\\*"
+             Exclude="..\\..\\client\\**\\__pycache__\\**;..\\..\\client\\logs\\**"
+             Link="client\\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\\..\\transceiver\\**\\*"
+             Exclude="..\\..\\transceiver\\**\\__pycache__\\**"
+             Link="transceiver\\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

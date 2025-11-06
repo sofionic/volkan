@@ -205,6 +205,28 @@ variables before launching Stargate.
 If the dashboard or mock fails to appear, confirm that Python is installed, the dependencies above were installed for the same
 interpreter, and that the `PythonAutomation__*` environment variables point to a valid executable/flag combination.
 
+## Publishing the Stargate service
+
+`dotnet publish` now carries the Python automation assets (`client/` and `transceiver/`) into the publish directory so the
+packaged executable can launch its helpers exactly like the development build. To produce a distributable folder run:
+
+```bash
+dotnet publish stargate/StargateService/StargateService.csproj -c Release -o out/publish
+```
+
+The resulting `out/publish/` directory contains `StargateService.exe` (or `StargateService.dll` for cross-platform hosting)
+and the Python scripts under `client/` and `transceiver/`. Copy the folder to the target machine, ensure Python and the
+required packages are installed, and launch the service:
+
+```powershell
+cd out\publish
+StargateService.exe
+```
+
+The same Python automation settings apply in the published build. Adjust `appsettings.json` or environment variables (for
+example, `PythonAutomation__PythonExecutable=py`) before starting the executable if the default interpreter discovery does
+not match the host.
+
 ## Containerised deployment
 
 Build and run the full stack with Docker Compose when you prefer containers:

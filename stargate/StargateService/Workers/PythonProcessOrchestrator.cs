@@ -110,6 +110,9 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
         _processes.Clear();
     }
 
+    /// <summary>
+    /// Attempt to start a configured Python script using any available interpreter.
+    /// </summary>
     private Process? LaunchProcess(PythonProcessOptions processOptions)
     {
         if (string.IsNullOrWhiteSpace(processOptions.Script))
@@ -151,6 +154,7 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
 
         var arguments = argumentsBuilder.ToString();
 
+        // Try each interpreter candidate until one successfully launches the script.
         foreach (var candidate in BuildExecutableCandidates())
         {
             try
@@ -213,6 +217,9 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
         return null;
     }
 
+    /// <summary>
+    /// Resolve the working directory root where child processes should execute.
+    /// </summary>
     private string ResolveBaseDirectory()
     {
         if (string.IsNullOrWhiteSpace(_options.BaseWorkingDirectory))
@@ -223,6 +230,9 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
         return Path.GetFullPath(Path.Combine(_environment.ContentRootPath, _options.BaseWorkingDirectory));
     }
 
+    /// <summary>
+    /// Resolve a process-specific working directory relative to the base directory.
+    /// </summary>
     private static string ResolveWorkingDirectory(string baseDirectory, string configuredDirectory)
     {
         if (string.IsNullOrWhiteSpace(configuredDirectory))
@@ -233,6 +243,9 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
         return Path.GetFullPath(Path.Combine(baseDirectory, configuredDirectory));
     }
 
+    /// <summary>
+    /// Produce an absolute path to the configured Python script.
+    /// </summary>
     private static string ResolveScriptPath(string baseDirectory, string script)
     {
         if (Path.IsPathRooted(script))
@@ -243,6 +256,9 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
         return Path.GetFullPath(Path.Combine(baseDirectory, script));
     }
 
+    /// <summary>
+    /// Build a unique list of interpreter candidates the orchestrator will test.
+    /// </summary>
     private IEnumerable<string> BuildExecutableCandidates()
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -262,6 +278,9 @@ public sealed class PythonProcessOrchestrator : IHostedService, IDisposable
         }
     }
 
+    /// <summary>
+    /// Provide the default interpreter names used across platforms.
+    /// </summary>
     private static IEnumerable<string> GetDefaultCandidates()
     {
         yield return "python";

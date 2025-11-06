@@ -1,3 +1,4 @@
+// Telemetry streaming contract shared between Stargate (.NET) and Python clients.
 syntax = "proto3";
 
 option csharp_namespace = "Stargate";
@@ -8,6 +9,7 @@ message StreamRequest {
   string spacecraft_id = 1;
 }
 
+// Environmental control and life support readings.
 message LifeSupport {
   double cabin_pressure_kpa = 1;
   double cabin_temperature_c = 2;
@@ -19,6 +21,7 @@ message LifeSupport {
   double food_supply_days = 8;
 }
 
+// Crew vital sign snapshot; strings carry categorical status values.
 message Crew {
   double heart_rate_bpm = 1;
   double blood_pressure_systolic = 2;
@@ -28,6 +31,7 @@ message Crew {
   string comm_status = 6;
 }
 
+// Orbital mechanics, position, and attitude telemetry.
 message Navigation {
   double velocity_kps = 1;
   double altitude_km = 2;
@@ -40,12 +44,14 @@ message Navigation {
   double periapsis_km = 9;
 }
 
+// Electrical system status including production and load.
 message Power {
   double battery_charge_percent = 1;
   double solar_output_kw = 2;
   double load_current_amp = 3;
 }
 
+// Thermal control loop observations.
 message Thermal {
   double hull_temp_c = 1;
   double radiator_temp_c = 2;
@@ -53,6 +59,7 @@ message Thermal {
   double coolant_loop_pressure_kpa = 4;
 }
 
+// Propulsion and reaction control metrics.
 message Propulsion {
   string main_engine_status = 1;
   double fuel_level_percent = 2;
@@ -60,6 +67,7 @@ message Propulsion {
   double acceleration_mps2 = 4;
 }
 
+// Communications link health and throughput.
 message Communications {
   double signal_strength_db = 1;
   double downlink_rate_mbps = 2;
@@ -67,12 +75,14 @@ message Communications {
   string active_relay = 4;
 }
 
+// Structural monitoring and anomaly channel.
 message Structural {
   double vibration_mms = 1;
   double hull_stress_mpa = 2;
   string warning_status = 3;
 }
 
+// Consolidated telemetry envelope sent to subscribers.
 message Telemetry {
   string spacecraft_id = 1;
   int64 timestamp_ms = 2;
@@ -86,6 +96,7 @@ message Telemetry {
   Structural structural = 10;
 }
 
+// Stargate provides a server-streaming RPC so clients can subscribe to telemetry updates.
 service TelemetryService {
   rpc StreamTelemetry(StreamRequest) returns (stream Telemetry);
 }

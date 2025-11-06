@@ -1,12 +1,15 @@
 {
+  "_comment": "Local development launch profiles for the Stargate gRPC service.",
   "profiles": {
     "StargateService": {
+      "_comment": "Default profile used when pressing Run in Visual Studio or dotnet run.",
       "commandName": "Project",
-      "launchBrowser": true,
+      "dotnetRunMessages": true,
+      "applicationUrl": "http://localhost:5000",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      },
-      "applicationUrl": "https://localhost:50890;http://localhost:50891"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "PythonAutomation__Enabled": "true"
+      }
     }
   }
 }

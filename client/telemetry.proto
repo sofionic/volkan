@@ -1,3 +1,4 @@
+// Telemetry schema shared by the Python dashboard and CLI clients.
 syntax = "proto3";
 
 package telemetry;
